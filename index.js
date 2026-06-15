@@ -1,12 +1,13 @@
-export * from './svgShapeFactoryUtils';
+// Auto-generated exports
 export * from './agvLineFactory';
+export * from './bridgeFactory';
+export * from './conveyorFactory';
+export * from './craneFactory';
+export * from './fullRateFactory';
+export * from './lifterFactory';
 export * from './micFactory';
 export * from './ohsLineFactory';
 export * from './ohtLineFactory';
-export * from './bridgeFactory';
-export * from './conveyorFactory';
-export * from './fullRateFactory';
-export * from './lifterFactory';
 export * from './portFactory';
 export * from './railBufferFactory';
 export * from './stockerFactory';
@@ -15,4 +16,3 @@ export * from './vehicle2Factory';
 export * from './vehicle3Factory';
 export * from './zoneContainerFactory';
 export * from './zoneFactory';
-export * from './craneFactory';

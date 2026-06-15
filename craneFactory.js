@@ -1,10 +1,10 @@
 // Auto-generated from crane.svg
 // This factory creates a single Konva.Shape, not a Konva.Group.
-// NO-TRANSFORM-FIX version: no inverse stroke or transform correction logic.
+// It does NOT assign Konva node `name`.
+// It does NOT include drag/transform correction logic.
 
 import {
   createSvgLikeShape,
-  updateSvgLikeShapeByDrag,
   serializeSvgLikeShape,
 } from './svgShapeFactoryUtils';
 
@@ -75,7 +75,6 @@ export function createCraneShape({
   return createSvgLikeShape({
     id,
     shapeType: CRANE_SHAPE_TYPE,
-    name: 'crane-shape',
     baseWidth: CRANE_BASE_WIDTH,
     baseHeight: CRANE_BASE_HEIGHT,
     viewBox: VIEW_BOX,
@@ -89,19 +88,6 @@ export function createCraneShape({
     rotation,
     draggable,
   });
-}
-
-export function createCraneShapeFromDrag({ id, start, current, draggable = true } = {}) {
-  const x = Math.min(start.x, current.x);
-  const y = Math.min(start.y, current.y);
-  const width = Math.max(Math.abs(current.x - start.x), 1);
-  const height = Math.max(Math.abs(current.y - start.y), 1);
-
-  return createCraneShape({ id, x, y, width, height, draggable });
-}
-
-export function updateCraneShapeByDrag(shape, start, current) {
-  updateSvgLikeShapeByDrag(shape, start, current);
 }
 
 export function serializeCraneShape(shape) {

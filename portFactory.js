@@ -1,8 +1,12 @@
 // Auto-generated from port.svg
 // This factory creates a single Konva.Shape, not a Konva.Group.
-// It is intended to replace Konva.Image usage while keeping your existing
-// "Group means label/equipment-name is attached" logic intact.
-import { createSvgLikeShape, updateSvgLikeShapeByDrag, serializeSvgLikeShape } from './svgShapeFactoryUtils';
+// It does NOT assign Konva node `name`.
+// It does NOT include drag/transform correction logic.
+
+import {
+  createSvgLikeShape,
+  serializeSvgLikeShape,
+} from './svgShapeFactoryUtils';
 
 export const PORT_BASE_WIDTH = 30.0;
 export const PORT_BASE_HEIGHT = 30.0;
@@ -55,7 +59,6 @@ export function createPortShape({
   return createSvgLikeShape({
     id,
     shapeType: PORT_SHAPE_TYPE,
-    name: 'port-shape',
     baseWidth: PORT_BASE_WIDTH,
     baseHeight: PORT_BASE_HEIGHT,
     viewBox: VIEW_BOX,
@@ -69,19 +72,6 @@ export function createPortShape({
     rotation,
     draggable,
   });
-}
-
-export function createPortShapeFromDrag({ id, start, current, draggable = true } = {}) {
-  const x = Math.min(start.x, current.x);
-  const y = Math.min(start.y, current.y);
-  const width = Math.max(Math.abs(current.x - start.x), 1);
-  const height = Math.max(Math.abs(current.y - start.y), 1);
-
-  return createPortShape({ id, x, y, width, height, draggable });
-}
-
-export function updatePortShapeByDrag(shape, start, current) {
-  updateSvgLikeShapeByDrag(shape, start, current);
 }
 
 export function serializePortShape(shape) {

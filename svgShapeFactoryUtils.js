@@ -1,11 +1,12 @@
-// Auto-generated helper for SVG-like Konva.Shape factories.
+// Shared helper for SVG-like Konva.Shape factories.
 //
-// NO-TRANSFORM-FIX version
-// - This version intentionally does NOT compensate stroke width during transform.
-// - It does NOT edge-align rect strokes dynamically.
-// - It does NOT calculate inverse scale from getAbsoluteScale().
-// - Konva's transform values are left as-is.
-// - Factories still create a single Konva.Shape, not a Konva.Group.
+// Design goals for this version:
+// 1. Each SVG is rendered as a single Konva.Shape, not a Konva.Group.
+// 2. No Konva node `name` is assigned.
+// 3. No drag/transform coordinate correction helpers are included.
+//    Keep Konva's x/y/width/height/scaleX/scaleY/rotation exactly as they are.
+// 4. Stroke width is drawn in screen-stable pixels by using the current canvas transform.
+// 5. Rect strokes are edge-aligned so their outside edge stays on the SVG boundary.
 
 import Konva from 'konva';
 
@@ -26,25 +27,30 @@ export function createSvgLikeShape({
   scaleY = 1,
   rotation = 0,
   draggable = true,
-  name = `${shapeType}-shape`,
 } = {}) {
+  const safeWidth = Math.max(width || baseWidth || viewBox.width || 1, 1);
+  const safeHeight = Math.max(height || baseHeight || viewBox.height || 1, 1);
+
   const shape = new Konva.Shape({
     id,
-    name,
     x,
     y,
-    width: Math.max(width || baseWidth, 1),
-    height: Math.max(height || baseHeight, 1),
+    width: safeWidth,
+    height: safeHeight,
     scaleX,
     scaleY,
     rotation,
     draggable,
 
-    // Keep existing app logic simple: this is a single node, not a Group.
+    // Do not set Konva `name`.
+    // Use custom attrs instead if the app needs to identify the object type.
     shapeType,
     equipmentType: shapeType,
+    svgBaseWidth: baseWidth,
+    svgBaseHeight: baseHeight,
 
-    // Used only by hitFunc so the whole bounding box is selectable.
+    // hitFunc uses fillStrokeShape, so provide a fill only for hit canvas.
+    // It is not used by sceneFunc.
     fill: 'black',
 
     sceneFunc(context, shape) {
@@ -60,17 +66,6 @@ export function createSvgLikeShape({
   });
 
   return shape;
-}
-
-export function updateSvgLikeShapeByDrag(shape, start, current) {
-  const x = Math.min(start.x, current.x);
-  const y = Math.min(start.y, current.y);
-  const width = Math.abs(current.x - start.x);
-  const height = Math.abs(current.y - start.y);
-
-  shape.position({ x, y });
-  shape.width(Math.max(width, 1));
-  shape.height(Math.max(height, 1));
 }
 
 export function serializeSvgLikeShape(shape) {
@@ -90,17 +85,19 @@ export function serializeSvgLikeShape(shape) {
 
 function drawSvgLikeScene(context, shape, commands, viewBox) {
   const ctx = getNativeContext(context);
+
   const width = Math.max(shape.width(), 1);
   const height = Math.max(shape.height(), 1);
-
-  const sx = width / viewBox.width;
-  const sy = height / viewBox.height;
+  const scaleX = width / Math.max(viewBox.width, 1);
+  const scaleY = height / Math.max(viewBox.height, 1);
 
   ctx.save();
-  ctx.scale(sx, sy);
+
+  // Convert SVG viewBox coordinates into this Shape's local width/height.
+  ctx.scale(scaleX, scaleY);
   ctx.translate(-viewBox.x, -viewBox.y);
 
-  // Approximate SVG clipPath/mask behavior by clipping to the original viewBox.
+  // Clip to the original SVG viewBox. This approximates mask/clipPath usage.
   ctx.beginPath();
   ctx.rect(viewBox.x, viewBox.y, viewBox.width, viewBox.height);
   ctx.clip();
@@ -119,16 +116,30 @@ function drawCommand(ctx, command) {
 
   if (command.type === 'path') {
     const path = getPath(command.data);
-    if (!path) {
-      ctx.restore();
-      return;
-    }
-    paintPath(ctx, path, command);
-  } else {
-    createPrimitivePath(ctx, command);
-    paintCurrentPath(ctx, command);
+    if (path) paintPath(ctx, path, command);
+    ctx.restore();
+    return;
   }
 
+  // For primitive rects, fill and stroke are handled separately so that
+  // rect strokes can be edge-aligned.
+  if (command.type === 'rect') {
+    if (command.fill) {
+      createPrimitivePath(ctx, command);
+      ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
+      ctx.fill(command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
+    }
+
+    if (command.stroke) {
+      drawEdgeAlignedRectStroke(ctx, command);
+    }
+
+    ctx.restore();
+    return;
+  }
+
+  createPrimitivePath(ctx, command);
+  paintCurrentPath(ctx, command);
   ctx.restore();
 }
 
@@ -147,7 +158,7 @@ function paintPath(ctx, path, command) {
   }
 
   if (command.stroke) {
-    applyStroke(ctx, command);
+    applyFixedStroke(ctx, command);
     ctx.stroke(path);
   }
 }
@@ -159,20 +170,89 @@ function paintCurrentPath(ctx, command) {
   }
 
   if (command.stroke) {
-    applyStroke(ctx, command);
+    applyFixedStroke(ctx, command);
     ctx.stroke();
   }
 }
 
-function applyStroke(ctx, command) {
+function applyFixedStroke(ctx, command) {
+  const { maxScale } = getCurrentCanvasScale(ctx);
+  const strokeWidth = command.strokeWidth || 1;
+  const localLineWidth = strokeWidth / maxScale;
+
   ctx.strokeStyle = applyOpacity(command.stroke, command.strokeOpacity);
-  ctx.lineWidth = command.strokeWidth || 1;
+  ctx.lineWidth = localLineWidth;
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
+  ctx.miterLimit = command.miterLimit || 10;
 
   if (Array.isArray(command.dash)) {
-    ctx.setLineDash(command.dash);
+    ctx.setLineDash(command.dash.map((value) => value / maxScale));
   }
+}
+
+function drawEdgeAlignedRectStroke(ctx, command) {
+  const { maxScale } = getCurrentCanvasScale(ctx);
+  const originalStrokeWidth = command.strokeWidth || 1;
+  const localLineWidth = originalStrokeWidth / maxScale;
+
+  // SVG rect strokes are centered on the rect edge. If the original SVG used
+  // x=stroke/2 and width=outerWidth-stroke, its outside edge is the real visual
+  // boundary. Reconstruct that outer boundary, then place a fixed-width stroke
+  // inside it so the outside edge stays aligned with the SVG boundary.
+  const originalInset = originalStrokeWidth / 2;
+  const outerX = (command.x || 0) - originalInset;
+  const outerY = (command.y || 0) - originalInset;
+  const outerWidth = Math.max((command.width || 0) + originalStrokeWidth, 0);
+  const outerHeight = Math.max((command.height || 0) + originalStrokeWidth, 0);
+
+  const dynamicInset = localLineWidth / 2;
+  const rx = command.rx == null
+    ? 0
+    : Math.max(command.rx + originalInset - dynamicInset, 0);
+  const ryBase = command.ry == null ? command.rx : command.ry;
+  const ry = ryBase == null
+    ? rx
+    : Math.max(ryBase + originalInset - dynamicInset, 0);
+
+  ctx.beginPath();
+  roundedRect(
+    ctx,
+    outerX + dynamicInset,
+    outerY + dynamicInset,
+    Math.max(outerWidth - localLineWidth, 0),
+    Math.max(outerHeight - localLineWidth, 0),
+    rx,
+    ry
+  );
+
+  ctx.strokeStyle = applyOpacity(command.stroke, command.strokeOpacity);
+  ctx.lineWidth = localLineWidth;
+  ctx.lineCap = command.lineCap || 'butt';
+  ctx.lineJoin = command.lineJoin || 'miter';
+  ctx.miterLimit = command.miterLimit || 10;
+
+  if (Array.isArray(command.dash)) {
+    ctx.setLineDash(command.dash.map((value) => value / maxScale));
+  }
+
+  ctx.stroke();
+}
+
+function getCurrentCanvasScale(ctx) {
+  if (!ctx || typeof ctx.getTransform !== 'function') {
+    return { scaleX: 1, scaleY: 1, maxScale: 1 };
+  }
+
+  const matrix = ctx.getTransform();
+  const scaleX = Math.hypot(matrix.a, matrix.b) || 1;
+  const scaleY = Math.hypot(matrix.c, matrix.d) || 1;
+
+  return {
+    scaleX,
+    scaleY,
+    maxScale: Math.max(scaleX, scaleY, 1),
+  };
 }
 
 function createPrimitivePath(ctx, command) {
