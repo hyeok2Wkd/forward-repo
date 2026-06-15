@@ -16,18 +16,26 @@ const VIEW_BOX = { x: 0.0, y: 0.0, width: 60.0, height: 30.0 };
 
 const DRAW_COMMANDS = [
   {
-    "type": "path",
+    "type": "fixedLine",
     "opacity": 1,
-    "fill": "black",
-    "fillOpacity": 0.5,
-    "data": "M0 5H60V13H0V5Z"
+    "stroke": "black",
+    "strokeOpacity": 0.5,
+    "strokeWidth": 8,
+    "x1": 0,
+    "y1": 9,
+    "x2": 60,
+    "y2": 9
   },
   {
-    "type": "path",
+    "type": "fixedLine",
     "opacity": 1,
-    "fill": "black",
-    "fillOpacity": 0.5,
-    "data": "M0 17H60V25H0V17Z"
+    "stroke": "black",
+    "strokeOpacity": 0.5,
+    "strokeWidth": 8,
+    "x1": 0,
+    "y1": 21,
+    "x2": 60,
+    "y2": 21
   }
 ];
 

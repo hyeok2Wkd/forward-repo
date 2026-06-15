@@ -103,16 +103,28 @@ function drawSvgLikeScene(context, shape, commands, viewBox) {
   ctx.clip();
 
   for (const command of commands) {
-    drawCommand(ctx, command);
+    drawCommand(ctx, command, viewBox);
   }
 
   ctx.restore();
 }
 
-function drawCommand(ctx, command) {
+function drawCommand(ctx, command, viewBox) {
   ctx.save();
   ctx.globalAlpha = command.opacity == null ? 1 : command.opacity;
   ctx.setLineDash([]);
+
+  if (command.type === 'fixedLine') {
+    drawFixedLine(ctx, command, viewBox);
+    ctx.restore();
+    return;
+  }
+
+  if (command.type === 'fixedRectGrid') {
+    drawFixedRectGrid(ctx, command, viewBox);
+    ctx.restore();
+    return;
+  }
 
   if (command.type === 'path') {
     const path = getPath(command.data);
@@ -141,6 +153,120 @@ function drawCommand(ctx, command) {
   createPrimitivePath(ctx, command);
   paintCurrentPath(ctx, command);
   ctx.restore();
+}
+
+function drawFixedLine(ctx, command, viewBox) {
+  const { scaleX, scaleY, maxScale } = getCurrentCanvasScale(ctx);
+  const edge = command.edge;
+  const isHorizontal = edge === 'top'
+    || edge === 'bottom'
+    || command.y1 === command.y2;
+  const isVertical = edge === 'left'
+    || edge === 'right'
+    || command.x1 === command.x2;
+  const strokeWidth = command.strokeWidth || 1;
+  const lineScale = isHorizontal
+    ? scaleY
+    : isVertical
+      ? scaleX
+      : maxScale;
+  const dashScale = isHorizontal
+    ? scaleX
+    : isVertical
+      ? scaleY
+      : maxScale;
+  const localLineWidth = strokeWidth / Math.max(lineScale, 1);
+  let x1 = command.x1 == null ? viewBox.x : command.x1;
+  let y1 = command.y1 == null ? viewBox.y : command.y1;
+  let x2 = command.x2 == null ? viewBox.x + viewBox.width : command.x2;
+  let y2 = command.y2 == null ? viewBox.y + viewBox.height : command.y2;
+
+  if (edge === 'top') {
+    y1 = viewBox.y + localLineWidth / 2;
+    y2 = y1;
+  } else if (edge === 'bottom') {
+    y1 = viewBox.y + viewBox.height - localLineWidth / 2;
+    y2 = y1;
+  } else if (edge === 'left') {
+    x1 = viewBox.x + localLineWidth / 2;
+    x2 = x1;
+  } else if (edge === 'right') {
+    x1 = viewBox.x + viewBox.width - localLineWidth / 2;
+    x2 = x1;
+  }
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.lineWidth = localLineWidth;
+  ctx.lineCap = command.lineCap || 'butt';
+  ctx.lineJoin = command.lineJoin || 'miter';
+  ctx.miterLimit = command.miterLimit || 10;
+
+  if (Array.isArray(command.dash)) {
+    ctx.setLineDash(command.dash.map((value) => value / Math.max(dashScale, 1)));
+  }
+
+  ctx.stroke();
+}
+
+function drawFixedRectGrid(ctx, command, viewBox) {
+  const { scaleX, scaleY } = getCurrentCanvasScale(ctx);
+  const usesDesignScale = command.sizingMode === 'heightScale';
+  const horizontalDesignRatio = usesDesignScale
+    ? Math.max(scaleY, 1) / Math.max(scaleX, 1)
+    : 1 / Math.max(scaleX, 1);
+  const verticalDesignRatio = usesDesignScale
+    ? 1
+    : 1 / Math.max(scaleY, 1);
+  const localRectWidth = (command.rectWidth || 1) * horizontalDesignRatio;
+  const localRectHeight = (command.rectHeight || 1) * verticalDesignRatio;
+  const localGapX = (command.gapX == null ? 0 : command.gapX) * horizontalDesignRatio;
+  const localGapY = (command.gapY == null ? 0 : command.gapY) * verticalDesignRatio;
+  const localPaddingLeft = (command.paddingLeft == null ? command.paddingX || 0 : command.paddingLeft) * horizontalDesignRatio;
+  const localPaddingRight = (command.paddingRight == null ? command.paddingX || 0 : command.paddingRight) * horizontalDesignRatio;
+  const localPaddingTop = (command.paddingTop == null ? command.paddingY || 0 : command.paddingTop) * verticalDesignRatio;
+  const localPaddingBottom = (command.paddingBottom == null ? command.paddingY || 0 : command.paddingBottom) * verticalDesignRatio;
+  const minX = viewBox.x + localPaddingLeft;
+  const minY = viewBox.y + localPaddingTop;
+  const maxX = viewBox.x + viewBox.width - localPaddingRight;
+  const maxY = viewBox.y + viewBox.height - localPaddingBottom;
+  const stepX = Math.max(localRectWidth + localGapX, localRectWidth);
+  const stepY = Math.max(localRectHeight + localGapY, localRectHeight);
+
+  if (localRectWidth <= 0 || localRectHeight <= 0 || maxX <= minX || maxY <= minY) {
+    return;
+  }
+
+  const availableWidth = maxX - minX;
+  const availableHeight = maxY - minY;
+  const columnCount = Math.max(
+    Math.floor((availableWidth + localGapX) / Math.max(stepX, 0.0001)),
+    0
+  );
+  const rowCount = Math.max(
+    Math.floor((availableHeight + localGapY) / Math.max(stepY, 0.0001)),
+    0
+  );
+  const usedWidth = columnCount > 0
+    ? columnCount * localRectWidth + Math.max(columnCount - 1, 0) * localGapX
+    : 0;
+  const usedHeight = rowCount > 0
+    ? rowCount * localRectHeight + Math.max(rowCount - 1, 0) * localGapY
+    : 0;
+  const startX = minX + Math.max((availableWidth - usedWidth) / 2, 0);
+  const startY = minY + Math.max((availableHeight - usedHeight) / 2, 0);
+
+  ctx.fillStyle = applyOpacity(command.fill || 'black', command.fillOpacity);
+
+  for (let row = 0; row < rowCount; row += 1) {
+    const y = startY + row * stepY;
+    for (let column = 0; column < columnCount; column += 1) {
+      const x = startX + column * stepX;
+      ctx.fillRect(x, y, localRectWidth, localRectHeight);
+    }
+  }
 }
 
 function getPath(data) {

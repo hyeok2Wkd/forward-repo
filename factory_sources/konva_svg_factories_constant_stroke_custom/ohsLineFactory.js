@@ -23,11 +23,20 @@ const DRAW_COMMANDS = [
     "data": "M0 0H60V30H0V0Z"
   },
   {
-    "type": "path",
+    "type": "fixedLine",
     "opacity": 1,
-    "fill": "black",
-    "fillOpacity": 0.5,
-    "data": "M0 0V3H60V0V-3H0V0ZM60 30V27H0V30V33H60V30Z"
+    "stroke": "black",
+    "strokeOpacity": 0.5,
+    "strokeWidth": 3,
+    "edge": "top"
+  },
+  {
+    "type": "fixedLine",
+    "opacity": 1,
+    "stroke": "black",
+    "strokeOpacity": 0.5,
+    "strokeWidth": 3,
+    "edge": "bottom"
   }
 ];
 

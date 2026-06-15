@@ -516,9 +516,36 @@ const DRAW_COMMANDS = [
   {
     "type": "path",
     "opacity": 1,
-    "fill": "black",
-    "fillOpacity": 0.5,
-    "data": "M0 0V1H60V0V-1H0V0ZM60 30V29H0V30V31H60V30Z"
+    "fill": "white",
+    "data": "M0 0H60V30H0V0Z"
+  },
+  {
+    "type": "fixedRectGrid",
+    "opacity": 0.5,
+    "fill": "#D1D1D6",
+    "sizingMode": "heightScale",
+    "rectWidth": 4,
+    "rectHeight": 10.5,
+    "gapX": 2,
+    "gapY": 3,
+    "paddingX": 0,
+    "paddingY": 3
+  },
+  {
+    "type": "fixedLine",
+    "opacity": 1,
+    "stroke": "black",
+    "strokeOpacity": 0.5,
+    "strokeWidth": 1,
+    "edge": "top"
+  },
+  {
+    "type": "fixedLine",
+    "opacity": 1,
+    "stroke": "black",
+    "strokeOpacity": 0.5,
+    "strokeWidth": 1,
+    "edge": "bottom"
   }
 ];
 
