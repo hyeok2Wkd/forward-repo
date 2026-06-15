@@ -1,5 +1,4 @@
 // Auto-generated exports
-export * from './svgShapeFactoryUtils';
 export * from './agvLineFactory';
 export * from './bridgeFactory';
 export * from './conveyorFactory';

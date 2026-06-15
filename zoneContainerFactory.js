@@ -1,28 +1,24 @@
-// Auto-generated from zone container.svg
-// 단일 Konva.Shape로 SVG 모양만 표시하는 factory.
+// Auto-generated from zone-container.svg
+// This factory creates a single Konva.Shape, not a Konva.Group.
+// It does NOT assign Konva node `name`.
+// It does NOT include drag/transform correction logic.
 
 import {
-  createSvgShape,
-  updateSvgShapeByDrag,
-  serializeSvgShape,
+  createSvgLikeShape,
+  serializeSvgLikeShape,
 } from './svgShapeFactoryUtils';
 
 export const ZONE_CONTAINER_BASE_WIDTH = 56.0;
 export const ZONE_CONTAINER_BASE_HEIGHT = 25.0;
-export const ZONE_CONTAINER_SHAPE_TYPE = "zoneContainer";
+export const ZONE_CONTAINER_SHAPE_TYPE = 'zone-container';
 
-const VIEW_BOX = {
-  "x": 0.0,
-  "y": 0.0,
-  "width": 56.0,
-  "height": 25.0
-};
+const VIEW_BOX = { x: 0.0, y: 0.0, width: 56.0, height: 25.0 };
 
 const DRAW_COMMANDS = [
   {
-    "opacity": 1.0,
-    "fill": "white",
     "type": "rect",
+    "opacity": 1,
+    "fill": "white",
     "x": 0,
     "y": 0,
     "width": 56.0,
@@ -41,9 +37,11 @@ export function createZoneContainerShape({
   rotation = 0,
   draggable = true,
 } = {}) {
-  return createSvgShape({
+  return createSvgLikeShape({
     id,
     shapeType: ZONE_CONTAINER_SHAPE_TYPE,
+    baseWidth: ZONE_CONTAINER_BASE_WIDTH,
+    baseHeight: ZONE_CONTAINER_BASE_HEIGHT,
     viewBox: VIEW_BOX,
     drawCommands: DRAW_COMMANDS,
     x,
@@ -57,33 +55,8 @@ export function createZoneContainerShape({
   });
 }
 
-export function createZoneContainerShapeFromDrag({
-  id,
-  start,
-  current,
-  draggable = true,
-} = {}) {
-  const x = Math.min(start.x, current.x);
-  const y = Math.min(start.y, current.y);
-  const width = Math.max(Math.abs(current.x - start.x), 1);
-  const height = Math.max(Math.abs(current.y - start.y), 1);
-
-  return createZoneContainerShape({
-    id,
-    x,
-    y,
-    width,
-    height,
-    draggable,
-  });
-}
-
-export function updateZoneContainerShapeByDrag(shape, start, current) {
-  updateSvgShapeByDrag(shape, start, current);
-}
-
 export function serializeZoneContainerShape(shape) {
-  return serializeSvgShape(shape);
+  return serializeSvgLikeShape(shape);
 }
 
 export function restoreZoneContainerShape(item) {

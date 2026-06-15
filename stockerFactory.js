@@ -1,28 +1,24 @@
 // Auto-generated from stocker.svg
-// 단일 Konva.Shape로 SVG 모양만 표시하는 factory.
+// This factory creates a single Konva.Shape, not a Konva.Group.
+// It does NOT assign Konva node `name`.
+// It does NOT include drag/transform correction logic.
 
 import {
-  createSvgShape,
-  updateSvgShapeByDrag,
-  serializeSvgShape,
+  createSvgLikeShape,
+  serializeSvgLikeShape,
 } from './svgShapeFactoryUtils';
 
 export const STOCKER_BASE_WIDTH = 60.0;
 export const STOCKER_BASE_HEIGHT = 30.0;
-export const STOCKER_SHAPE_TYPE = "stocker";
+export const STOCKER_SHAPE_TYPE = 'stocker';
 
-const VIEW_BOX = {
-  "x": 0.0,
-  "y": 0.0,
-  "width": 60.0,
-  "height": 30.0
-};
+const VIEW_BOX = { x: 0.0, y: 0.0, width: 60.0, height: 30.0 };
 
 const DRAW_COMMANDS = [
   {
-    "opacity": 1.0,
-    "fill": "white",
     "type": "rect",
+    "opacity": 1,
+    "fill": "white",
     "x": 0,
     "y": 0,
     "width": 60.0,
@@ -30,11 +26,11 @@ const DRAW_COMMANDS = [
     "rx": 7.0
   },
   {
-    "opacity": 1.0,
+    "type": "rect",
+    "opacity": 1,
     "stroke": "black",
     "strokeOpacity": 0.5,
     "strokeWidth": 2.0,
-    "type": "rect",
     "x": 1.0,
     "y": 1.0,
     "width": 58.0,
@@ -54,9 +50,11 @@ export function createStockerShape({
   rotation = 0,
   draggable = true,
 } = {}) {
-  return createSvgShape({
+  return createSvgLikeShape({
     id,
     shapeType: STOCKER_SHAPE_TYPE,
+    baseWidth: STOCKER_BASE_WIDTH,
+    baseHeight: STOCKER_BASE_HEIGHT,
     viewBox: VIEW_BOX,
     drawCommands: DRAW_COMMANDS,
     x,
@@ -70,33 +68,8 @@ export function createStockerShape({
   });
 }
 
-export function createStockerShapeFromDrag({
-  id,
-  start,
-  current,
-  draggable = true,
-} = {}) {
-  const x = Math.min(start.x, current.x);
-  const y = Math.min(start.y, current.y);
-  const width = Math.max(Math.abs(current.x - start.x), 1);
-  const height = Math.max(Math.abs(current.y - start.y), 1);
-
-  return createStockerShape({
-    id,
-    x,
-    y,
-    width,
-    height,
-    draggable,
-  });
-}
-
-export function updateStockerShapeByDrag(shape, start, current) {
-  updateSvgShapeByDrag(shape, start, current);
-}
-
 export function serializeStockerShape(shape) {
-  return serializeSvgShape(shape);
+  return serializeSvgLikeShape(shape);
 }
 
 export function restoreStockerShape(item) {
