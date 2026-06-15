@@ -1,60 +1,59 @@
-// Auto-generated from zone.svg
-// This factory creates a single Konva.Shape, not a Konva.Group.
-// It does NOT assign Konva node `name`.
-// It does NOT include drag/transform correction logic.
+// Zone factory.
+// Shadow/drop-shadow from the original SVG is intentionally removed.
+// The remaining visible design is preserved as a single Konva.Shape.
 
 import {
   createSvgLikeShape,
   serializeSvgLikeShape,
 } from './svgShapeFactoryUtils';
 
-export const ZONE_BASE_WIDTH = 64.0;
-export const ZONE_BASE_HEIGHT = 34.0;
+export const ZONE_BASE_WIDTH = 60.0;
+export const ZONE_BASE_HEIGHT = 30.0;
 export const ZONE_SHAPE_TYPE = 'zone';
 
-const VIEW_BOX = { x: 0.0, y: 0.0, width: 64.0, height: 34.0 };
+const VIEW_BOX = { x: 0.0, y: 0.0, width: 60.0, height: 30.0 };
 
 const DRAW_COMMANDS = [
   {
-    "type": "rect",
-    "opacity": 1,
-    "fill": "white",
-    "x": 0,
-    "y": 0,
-    "width": 60.0,
-    "height": 30.0
+    type: 'rect',
+    opacity: 1,
+    fill: 'white',
+    x: 0,
+    y: 0,
+    width: 60.0,
+    height: 30.0,
   },
   {
-    "type": "rect",
-    "opacity": 1,
-    "stroke": "black",
-    "strokeOpacity": 0.5,
-    "strokeWidth": 1,
-    "x": 0.5,
-    "y": 0.5,
-    "width": 59.0,
-    "height": 29.0
+    type: 'rect',
+    opacity: 1,
+    stroke: 'black',
+    strokeOpacity: 0.5,
+    strokeWidth: 1,
+    x: 0.5,
+    y: 0.5,
+    width: 59.0,
+    height: 29.0,
   },
   {
-    "type": "rect",
-    "opacity": 1,
-    "fill": "white",
-    "x": 2.0,
-    "y": 2.0,
-    "width": 56.0,
-    "height": 26.0
+    type: 'rect',
+    opacity: 1,
+    fill: 'white',
+    x: 2.0,
+    y: 2.0,
+    width: 56.0,
+    height: 26.0,
   },
   {
-    "type": "rect",
-    "opacity": 1,
-    "stroke": "black",
-    "strokeOpacity": 0.5,
-    "strokeWidth": 1,
-    "x": 2.5,
-    "y": 2.5,
-    "width": 55.0,
-    "height": 25.0
-  }
+    type: 'rect',
+    opacity: 1,
+    stroke: 'black',
+    strokeOpacity: 0.5,
+    strokeWidth: 1,
+    x: 2.5,
+    y: 2.5,
+    width: 55.0,
+    height: 25.0,
+  },
 ];
 
 export function createZoneShape({
