@@ -1,53 +1,57 @@
 // Auto-generated from lifter.svg
-// This factory creates a single Konva.Shape, not a Konva.Group.
-// It does NOT assign Konva node `name`.
-// It does NOT include drag/transform correction logic.
+// 단일 Konva.Shape로 SVG 모양만 표시하는 factory.
 
 import {
-  createSvgLikeShape,
-  serializeSvgLikeShape,
+  createSvgShape,
+  updateSvgShapeByDrag,
+  serializeSvgShape,
 } from './svgShapeFactoryUtils';
 
 export const LIFTER_BASE_WIDTH = 30.0;
 export const LIFTER_BASE_HEIGHT = 24.0;
-export const LIFTER_SHAPE_TYPE = 'lifter';
+export const LIFTER_SHAPE_TYPE = "lifter";
 
-const VIEW_BOX = { x: 0.0, y: 0.0, width: 30.0, height: 24.0 };
+const VIEW_BOX = {
+  "x": 0.0,
+  "y": 0.0,
+  "width": 30.0,
+  "height": 24.0
+};
 
 const DRAW_COMMANDS = [
   {
-    "type": "path",
-    "opacity": 1,
+    "opacity": 1.0,
     "fill": "black",
     "fillOpacity": 0.5,
+    "type": "path",
     "data": "M0 0H30V5.33333V24H23.2258V22.9565H29.0323V1.04348H0.967742V22.9565H6.77419V24H0V0Z"
   },
   {
-    "type": "rect",
-    "opacity": 1,
+    "opacity": 1.0,
     "fill": "white",
+    "type": "rect",
     "x": 3.0,
     "y": 3.0,
     "width": 24.0,
     "height": 18.0
   },
   {
-    "type": "rect",
-    "opacity": 1,
+    "opacity": 1.0,
     "stroke": "black",
     "strokeOpacity": 0.5,
     "strokeWidth": 1,
+    "type": "rect",
     "x": 3.5,
     "y": 3.5,
     "width": 23.0,
     "height": 17.0
   },
   {
-    "type": "path",
-    "opacity": 1,
+    "opacity": 1.0,
     "stroke": "black",
     "strokeOpacity": 0.5,
     "strokeWidth": 0.5,
+    "type": "path",
     "data": "M4 20L26 4M26 20L4 4"
   }
 ];
@@ -63,11 +67,9 @@ export function createLifterShape({
   rotation = 0,
   draggable = true,
 } = {}) {
-  return createSvgLikeShape({
+  return createSvgShape({
     id,
     shapeType: LIFTER_SHAPE_TYPE,
-    baseWidth: LIFTER_BASE_WIDTH,
-    baseHeight: LIFTER_BASE_HEIGHT,
     viewBox: VIEW_BOX,
     drawCommands: DRAW_COMMANDS,
     x,
@@ -81,8 +83,33 @@ export function createLifterShape({
   });
 }
 
+export function createLifterShapeFromDrag({
+  id,
+  start,
+  current,
+  draggable = true,
+} = {}) {
+  const x = Math.min(start.x, current.x);
+  const y = Math.min(start.y, current.y);
+  const width = Math.max(Math.abs(current.x - start.x), 1);
+  const height = Math.max(Math.abs(current.y - start.y), 1);
+
+  return createLifterShape({
+    id,
+    x,
+    y,
+    width,
+    height,
+    draggable,
+  });
+}
+
+export function updateLifterShapeByDrag(shape, start, current) {
+  updateSvgShapeByDrag(shape, start, current);
+}
+
 export function serializeLifterShape(shape) {
-  return serializeSvgLikeShape(shape);
+  return serializeSvgShape(shape);
 }
 
 export function restoreLifterShape(item) {
