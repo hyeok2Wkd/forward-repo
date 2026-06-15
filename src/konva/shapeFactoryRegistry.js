@@ -29,12 +29,18 @@ import {
   createPortShape,
   restorePortShape,
   serializePortShape,
+  createProcessShape,
+  restoreProcessShape,
+  serializeProcessShape,
   createRailBufferShape,
   restoreRailBufferShape,
   serializeRailBufferShape,
   createStockerShape,
   restoreStockerShape,
   serializeStockerShape,
+  createStbShape,
+  restoreStbShape,
+  serializeStbShape,
   createVehicle1Shape,
   restoreVehicle1Shape,
   serializeVehicle1Shape,
@@ -44,6 +50,9 @@ import {
   createVehicle3Shape,
   restoreVehicle3Shape,
   serializeVehicle3Shape,
+  createWaypointShape,
+  restoreWaypointShape,
+  serializeWaypointShape,
   createZoneContainerShape,
   restoreZoneContainerShape,
   serializeZoneContainerShape,
@@ -76,6 +85,14 @@ export const SHAPE_FACTORY_REGISTRY = Object.freeze({
     create: createPortShape,
     restore: restorePortShape,
     serialize: serializePortShape,
+  },
+  process: {
+    type: 'process',
+    shapeType: 'process',
+    label: 'Process',
+    create: createProcessShape,
+    restore: restoreProcessShape,
+    serialize: serializeProcessShape,
   },
   crane: {
     type: 'crane',
@@ -149,6 +166,14 @@ export const SHAPE_FACTORY_REGISTRY = Object.freeze({
     restore: restoreFullRateShape,
     serialize: serializeFullRateShape,
   },
+  stb: {
+    type: 'stb',
+    shapeType: 'stb',
+    label: 'STB',
+    create: createStbShape,
+    restore: restoreStbShape,
+    serialize: serializeStbShape,
+  },
   vehicle1: {
     type: 'vehicle1',
     shapeType: 'vehicle1',
@@ -172,6 +197,14 @@ export const SHAPE_FACTORY_REGISTRY = Object.freeze({
     create: createVehicle3Shape,
     restore: restoreVehicle3Shape,
     serialize: serializeVehicle3Shape,
+  },
+  waypoint: {
+    type: 'waypoint',
+    shapeType: 'waypoint',
+    label: 'Waypoint',
+    create: createWaypointShape,
+    restore: restoreWaypointShape,
+    serialize: serializeWaypointShape,
   },
   zone: {
     type: 'zone',
@@ -200,6 +233,8 @@ const shapeTypeAliases = Object.values(SHAPE_FACTORY_REGISTRY).reduce((aliases, 
   aliases[item.shapeType] = item.type;
   return aliases;
 }, {});
+
+shapeTypeAliases.STB = 'stb';
 
 export const SHAPE_TYPE_ALIASES = Object.freeze(shapeTypeAliases);
 

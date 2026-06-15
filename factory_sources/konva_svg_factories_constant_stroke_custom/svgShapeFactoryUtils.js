@@ -126,6 +126,18 @@ function drawCommand(ctx, command, viewBox) {
     return;
   }
 
+  if (command.type === 'fixedEllipseStroke') {
+    drawFixedEllipseStroke(ctx, command);
+    ctx.restore();
+    return;
+  }
+
+  if (command.type === 'fixedPolygonStroke') {
+    drawFixedPolygonStroke(ctx, command);
+    ctx.restore();
+    return;
+  }
+
   if (command.type === 'path') {
     const path = getPath(command.data);
     if (path) paintPath(ctx, path, command);
@@ -267,6 +279,126 @@ function drawFixedRectGrid(ctx, command, viewBox) {
       ctx.fillRect(x, y, localRectWidth, localRectHeight);
     }
   }
+}
+
+function drawFixedEllipseStroke(ctx, command) {
+  const { maxScale } = getCurrentCanvasScale(ctx);
+  const strokeWidth = command.strokeWidth || 1;
+  const localLineWidth = strokeWidth / Math.max(maxScale, 1);
+  const inset = command.edgeAligned === false ? 0 : localLineWidth / 2;
+  const rx = Math.max((command.rx == null ? command.r : command.rx) - inset, 0);
+  const ry = Math.max((command.ry == null ? command.r : command.ry) - inset, 0);
+
+  if (!rx || !ry) return;
+
+  ctx.beginPath();
+  ctx.ellipse(command.cx || 0, command.cy || 0, rx, ry, 0, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.strokeStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.lineWidth = localLineWidth;
+  ctx.lineCap = command.lineCap || 'butt';
+  ctx.lineJoin = command.lineJoin || 'miter';
+  ctx.miterLimit = command.miterLimit || 10;
+
+  if (Array.isArray(command.dash)) {
+    ctx.setLineDash(command.dash.map((value) => value / Math.max(maxScale, 1)));
+  }
+
+  ctx.stroke();
+}
+
+function drawFixedPolygonStroke(ctx, command) {
+  const points = command.points || [];
+  if (points.length < 2) return;
+
+  const { maxScale } = getCurrentCanvasScale(ctx);
+  const strokeWidth = command.strokeWidth || 1;
+  const localLineWidth = strokeWidth / Math.max(maxScale, 1);
+  const inset = command.edgeAligned === false ? 0 : localLineWidth / 2;
+  const strokePoints = inset && points.length > 2
+    ? offsetClosedPolygon(points, inset)
+    : points;
+
+  if (strokePoints.length < 2) return;
+
+  ctx.beginPath();
+  ctx.moveTo(strokePoints[0].x, strokePoints[0].y);
+  for (let index = 1; index < strokePoints.length; index += 1) {
+    ctx.lineTo(strokePoints[index].x, strokePoints[index].y);
+  }
+  if (command.closed !== false) ctx.closePath();
+
+  ctx.strokeStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.lineWidth = localLineWidth;
+  ctx.lineCap = command.lineCap || 'butt';
+  ctx.lineJoin = command.lineJoin || 'miter';
+  ctx.miterLimit = command.miterLimit || 10;
+
+  if (Array.isArray(command.dash)) {
+    ctx.setLineDash(command.dash.map((value) => value / Math.max(maxScale, 1)));
+  }
+
+  ctx.stroke();
+}
+
+function offsetClosedPolygon(points, inset) {
+  const area = getPolygonSignedArea(points);
+  const normalDirection = area >= 0 ? 1 : -1;
+  const edgeLines = points.map((point, index) => {
+    const next = points[(index + 1) % points.length];
+    const dx = next.x - point.x;
+    const dy = next.y - point.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const normal = {
+      x: (-dy / length) * normalDirection,
+      y: (dx / length) * normalDirection,
+    };
+
+    return {
+      start: {
+        x: point.x + normal.x * inset,
+        y: point.y + normal.y * inset,
+      },
+      end: {
+        x: next.x + normal.x * inset,
+        y: next.y + normal.y * inset,
+      },
+    };
+  });
+
+  return points.map((point, index) => {
+    const previousLine = edgeLines[(index - 1 + edgeLines.length) % edgeLines.length];
+    const currentLine = edgeLines[index];
+    return getLineIntersection(previousLine.start, previousLine.end, currentLine.start, currentLine.end)
+      || currentLine.start
+      || point;
+  });
+}
+
+function getPolygonSignedArea(points) {
+  let area = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    area += current.x * next.y - next.x * current.y;
+  }
+  return area / 2;
+}
+
+function getLineIntersection(a1, a2, b1, b2) {
+  const r = { x: a2.x - a1.x, y: a2.y - a1.y };
+  const s = { x: b2.x - b1.x, y: b2.y - b1.y };
+  const denominator = r.x * s.y - r.y * s.x;
+
+  if (Math.abs(denominator) < 0.000001) return null;
+
+  const qp = { x: b1.x - a1.x, y: b1.y - a1.y };
+  const t = (qp.x * s.y - qp.y * s.x) / denominator;
+
+  return {
+    x: a1.x + t * r.x,
+    y: a1.y + t * r.y,
+  };
 }
 
 function getPath(data) {

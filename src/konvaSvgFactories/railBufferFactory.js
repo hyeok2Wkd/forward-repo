@@ -19,7 +19,7 @@ const DRAW_COMMANDS = [
     "type": "rect",
     "opacity": 1,
     "stroke": "black",
-    "strokeOpacity": 0.5,
+    "strokeOpacity": 0.9,
     "strokeWidth": 1,
     "lineJoin": "bevel",
     "dash": [
