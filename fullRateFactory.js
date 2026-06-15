@@ -1,0 +1,103 @@
+// Auto-generated from full rate.svg
+// This factory creates a single Konva.Shape, not a Konva.Group.
+// It is intended to replace Konva.Image usage while keeping your existing
+// "Group means label/equipment-name is attached" logic intact.
+import { createSvgLikeShape, updateSvgLikeShapeByDrag, serializeSvgLikeShape } from './svgShapeFactoryUtils';
+
+export const FULL_RATE_BASE_WIDTH = 60.0;
+export const FULL_RATE_BASE_HEIGHT = 30.0;
+export const FULL_RATE_SHAPE_TYPE = 'full-rate';
+
+const VIEW_BOX = { x: 0.0, y: 0.0, width: 60.0, height: 30.0 };
+
+const DRAW_COMMANDS = [
+  {
+    "type": "rect",
+    "opacity": 1,
+    "fill": "white",
+    "x": 0,
+    "y": 0,
+    "width": 60.0,
+    "height": 30.0,
+    "rx": 15.0
+  },
+  {
+    "type": "rect",
+    "opacity": 1,
+    "stroke": "black",
+    "strokeOpacity": 0.5,
+    "strokeWidth": 1,
+    "x": 0.5,
+    "y": 0.5,
+    "width": 59.0,
+    "height": 29.0,
+    "rx": 14.5
+  },
+  {
+    "type": "path",
+    "opacity": 1,
+    "fill": "#4B5565",
+    "data": "M22.243 19.11C20.45 19.11 19.394 17.658 19.383 15.106C19.394 12.587 20.461 11.113 22.243 11.124C24.036 11.113 25.103 12.587 25.103 15.106C25.103 17.658 24.047 19.11 22.243 19.11ZM20.571 15.106C20.571 17.053 21.198 18.087 22.243 18.098C23.299 18.087 23.926 17.053 23.915 15.106C23.926 13.181 23.288 12.114 22.243 12.114C21.209 12.114 20.571 13.181 20.571 15.106ZM29.0213 19.11C27.2283 19.11 26.1723 17.658 26.1613 15.106C26.1723 12.587 27.2393 11.113 29.0213 11.124C30.8143 11.113 31.8813 12.587 31.8813 15.106C31.8813 17.658 30.8253 19.11 29.0213 19.11ZM27.3493 15.106C27.3493 17.053 27.9763 18.087 29.0213 18.098C30.0773 18.087 30.7043 17.053 30.6933 15.106C30.7043 13.181 30.0663 12.114 29.0213 12.114C27.9873 12.114 27.3493 13.181 27.3493 15.106ZM37.1636 17.13C37.1526 16.25 37.7246 15.513 38.7476 15.502C39.7706 15.513 40.3206 16.25 40.3096 17.13V17.548C40.3206 18.417 39.7596 19.165 38.7476 19.154C37.7136 19.165 37.1526 18.417 37.1636 17.548V17.13ZM33.2476 13.082V12.686C33.2366 11.795 33.8196 11.058 34.8316 11.058C35.8656 11.058 36.4046 11.795 36.3936 12.686V13.082C36.4046 13.973 35.8436 14.71 34.8316 14.71C33.7976 14.71 33.2366 13.962 33.2476 13.082ZM33.5996 19L38.9456 11.212H39.8696L34.5016 19H33.5996ZM34.1276 13.082C34.1386 13.522 34.3146 13.94 34.8316 13.94C35.3376 13.94 35.5136 13.522 35.5136 13.082V12.686C35.5136 12.246 35.3486 11.828 34.8316 11.828C34.3256 11.828 34.1386 12.246 34.1276 12.686V13.082ZM38.0436 17.548C38.0436 17.977 38.2196 18.395 38.7476 18.406C39.2426 18.395 39.4296 17.977 39.4296 17.548V17.13C39.4296 16.701 39.2646 16.272 38.7476 16.272C38.2416 16.272 38.0436 16.701 38.0436 17.13V17.548Z"
+  }
+];
+
+export function createFullRateShape({
+  id,
+  x = 0,
+  y = 0,
+  width = FULL_RATE_BASE_WIDTH,
+  height = FULL_RATE_BASE_HEIGHT,
+  scaleX = 1,
+  scaleY = 1,
+  rotation = 0,
+  draggable = true,
+} = {}) {
+  return createSvgLikeShape({
+    id,
+    shapeType: FULL_RATE_SHAPE_TYPE,
+    name: 'full-rate-shape',
+    baseWidth: FULL_RATE_BASE_WIDTH,
+    baseHeight: FULL_RATE_BASE_HEIGHT,
+    viewBox: VIEW_BOX,
+    drawCommands: DRAW_COMMANDS,
+    x,
+    y,
+    width,
+    height,
+    scaleX,
+    scaleY,
+    rotation,
+    draggable,
+  });
+}
+
+export function createFullRateShapeFromDrag({ id, start, current, draggable = true } = {}) {
+  const x = Math.min(start.x, current.x);
+  const y = Math.min(start.y, current.y);
+  const width = Math.max(Math.abs(current.x - start.x), 1);
+  const height = Math.max(Math.abs(current.y - start.y), 1);
+
+  return createFullRateShape({ id, x, y, width, height, draggable });
+}
+
+export function updateFullRateShapeByDrag(shape, start, current) {
+  updateSvgLikeShapeByDrag(shape, start, current);
+}
+
+export function serializeFullRateShape(shape) {
+  return serializeSvgLikeShape(shape);
+}
+
+export function restoreFullRateShape(item) {
+  return createFullRateShape({
+    id: item.id,
+    x: item.x,
+    y: item.y,
+    width: item.width,
+    height: item.height,
+    scaleX: item.scaleX,
+    scaleY: item.scaleY,
+    rotation: item.rotation,
+    draggable: item.draggable,
+  });
+}
