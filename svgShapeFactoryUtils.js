@@ -1,19 +1,15 @@
 // Auto-generated helper for SVG-like Konva.Shape factories.
-// Copy this file together with the generated *Factory.js files.
 //
-// v2 update:
-// - Rect strokes that were authored as an outer border in SVG
-//   (e.g. x=0.5,width=29,strokeWidth=1 inside a 30x30 viewBox)
-//   are drawn with a dynamic center line. This keeps the visible border
-//   attached to the outer edge when the shape is resized, while keeping
-//   stroke thickness visually stable.
-// - Path strokes are still drawn with scale-compensated lineWidth.
+// NO-TRANSFORM-FIX version
+// - This version intentionally does NOT compensate stroke width during transform.
+// - It does NOT edge-align rect strokes dynamically.
+// - It does NOT calculate inverse scale from getAbsoluteScale().
+// - Konva's transform values are left as-is.
 // - Factories still create a single Konva.Shape, not a Konva.Group.
 
 import Konva from 'konva';
 
 const pathCache = new Map();
-const EPSILON = 0.0001;
 
 export function createSvgLikeShape({
   id,
@@ -100,18 +96,6 @@ function drawSvgLikeScene(context, shape, commands, viewBox) {
   const sx = width / viewBox.width;
   const sy = height / viewBox.height;
 
-  const absScale = shape.getAbsoluteScale ? shape.getAbsoluteScale() : { x: 1, y: 1 };
-  const effectiveScaleX = Math.abs(sx * (absScale.x || 1)) || 1;
-  const effectiveScaleY = Math.abs(sy * (absScale.y || 1)) || 1;
-  const effectiveMaxScale = Math.max(effectiveScaleX, effectiveScaleY, 1);
-
-  const drawState = {
-    viewBox,
-    effectiveScaleX,
-    effectiveScaleY,
-    effectiveMaxScale,
-  };
-
   ctx.save();
   ctx.scale(sx, sy);
   ctx.translate(-viewBox.x, -viewBox.y);
@@ -122,13 +106,13 @@ function drawSvgLikeScene(context, shape, commands, viewBox) {
   ctx.clip();
 
   for (const command of commands) {
-    drawCommand(ctx, command, drawState);
+    drawCommand(ctx, command);
   }
 
   ctx.restore();
 }
 
-function drawCommand(ctx, command, drawState) {
+function drawCommand(ctx, command) {
   ctx.save();
   ctx.globalAlpha = command.opacity == null ? 1 : command.opacity;
   ctx.setLineDash([]);
@@ -139,12 +123,10 @@ function drawCommand(ctx, command, drawState) {
       ctx.restore();
       return;
     }
-    paintPath(ctx, path, command, drawState);
-  } else if (shouldUseEdgeRectStroke(command, drawState.viewBox)) {
-    drawEdgeAlignedRectStroke(ctx, command, drawState);
+    paintPath(ctx, path, command);
   } else {
     createPrimitivePath(ctx, command);
-    paintCurrentPath(ctx, command, drawState);
+    paintCurrentPath(ctx, command);
   }
 
   ctx.restore();
@@ -158,113 +140,54 @@ function getPath(data) {
   return pathCache.get(data);
 }
 
-function paintPath(ctx, path, command, drawState) {
+function paintPath(ctx, path, command) {
   if (command.fill) {
     ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
     ctx.fill(path, command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
   }
 
   if (command.stroke) {
-    applyStroke(ctx, command, drawState);
+    applyStroke(ctx, command);
     ctx.stroke(path);
   }
 }
 
-function paintCurrentPath(ctx, command, drawState) {
+function paintCurrentPath(ctx, command) {
   if (command.fill) {
     ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
     ctx.fill(command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
   }
 
   if (command.stroke) {
-    applyStroke(ctx, command, drawState);
+    applyStroke(ctx, command);
     ctx.stroke();
   }
 }
 
-function applyStroke(ctx, command, drawState) {
-  const effectiveMaxScale = drawState.effectiveMaxScale || 1;
-
+function applyStroke(ctx, command) {
   ctx.strokeStyle = applyOpacity(command.stroke, command.strokeOpacity);
-  ctx.lineWidth = (command.strokeWidth || 1) / effectiveMaxScale;
+  ctx.lineWidth = command.strokeWidth || 1;
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
 
   if (Array.isArray(command.dash)) {
-    ctx.setLineDash(command.dash.map((value) => value / effectiveMaxScale));
+    ctx.setLineDash(command.dash);
   }
-}
-
-function shouldUseEdgeRectStroke(command, viewBox) {
-  if (!command || command.type !== 'rect') return false;
-  if (!command.stroke) return false;
-  if (command.fill) return false;
-
-  const strokeWidth = command.strokeWidth || 1;
-  const expectedInset = strokeWidth / 2;
-
-  const outerX = (command.x || 0) - expectedInset;
-  const outerY = (command.y || 0) - expectedInset;
-  const outerWidth = (command.width || 0) + strokeWidth;
-  const outerHeight = (command.height || 0) + strokeWidth;
-
-  // This is the common SVG authoring pattern for an outer border:
-  // <rect x="0.5" y="0.5" width="W-1" height="H-1" stroke-width="1" />
-  // or <rect x="1" y="1" width="W-2" height="H-2" stroke-width="2" />.
-  // When we keep stroke thickness fixed, reusing x/y would make the border
-  // drift inward as the node grows. So these rects need dynamic edge alignment.
-  return (
-    nearlyEqual(outerX, viewBox.x) &&
-    nearlyEqual(outerY, viewBox.y) &&
-    nearlyEqual(outerWidth, viewBox.width) &&
-    nearlyEqual(outerHeight, viewBox.height)
-  );
-}
-
-function drawEdgeAlignedRectStroke(ctx, command, drawState) {
-  const strokeWidth = command.strokeWidth || 1;
-  const originalInset = strokeWidth / 2;
-
-  const outerX = (command.x || 0) - originalInset;
-  const outerY = (command.y || 0) - originalInset;
-  const outerWidth = (command.width || 0) + strokeWidth;
-  const outerHeight = (command.height || 0) + strokeWidth;
-
-  const lineWidth = strokeWidth / (drawState.effectiveMaxScale || 1);
-  const dynamicInset = lineWidth / 2;
-
-  const rx = command.rx == null ? 0 : Math.max(command.rx + originalInset - dynamicInset, 0);
-  const ryBase = command.ry == null ? command.rx : command.ry;
-  const ry = ryBase == null ? rx : Math.max(ryBase + originalInset - dynamicInset, 0);
-
-  ctx.beginPath();
-  roundedRect(
-    ctx,
-    outerX + dynamicInset,
-    outerY + dynamicInset,
-    Math.max(outerWidth - lineWidth, 0),
-    Math.max(outerHeight - lineWidth, 0),
-    rx,
-    ry
-  );
-
-  ctx.strokeStyle = applyOpacity(command.stroke, command.strokeOpacity);
-  ctx.lineWidth = lineWidth;
-  ctx.lineCap = command.lineCap || 'butt';
-  ctx.lineJoin = command.lineJoin || 'miter';
-
-  if (Array.isArray(command.dash)) {
-    ctx.setLineDash(command.dash.map((value) => value / (drawState.effectiveMaxScale || 1)));
-  }
-
-  ctx.stroke();
 }
 
 function createPrimitivePath(ctx, command) {
   ctx.beginPath();
 
   if (command.type === 'rect') {
-    roundedRect(ctx, command.x || 0, command.y || 0, command.width || 0, command.height || 0, command.rx || 0, command.ry || command.rx || 0);
+    roundedRect(
+      ctx,
+      command.x || 0,
+      command.y || 0,
+      command.width || 0,
+      command.height || 0,
+      command.rx || 0,
+      command.ry || command.rx || 0
+    );
     return;
   }
 
@@ -342,10 +265,6 @@ function hexToRgba(hex, opacity) {
   const b = bigint & 255;
 
   return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-}
-
-function nearlyEqual(a, b) {
-  return Math.abs((a || 0) - (b || 0)) <= EPSILON;
 }
 
 function getNativeContext(context) {

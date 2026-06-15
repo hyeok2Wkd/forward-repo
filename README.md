@@ -1,44 +1,26 @@
-# Konva SVG Factory Files - edge-fixed version
+# Konva SVG Factories - no transform correction version
 
-These files convert the uploaded SVG assets into single `Konva.Shape` factories.
-They are intended to replace `Konva.Image` usage while preserving the existing app meaning:
+이 버전은 SVG들을 `Konva.Image` 대신 **단일 `Konva.Shape`**로 생성하기 위한 factory 모음입니다.
 
-- single node = equipment without label/name
-- `Konva.Group` = equipment with label/name attached
+## 핵심 정책
 
-## Main change in this version
+- `Konva.Group`을 만들지 않습니다.
+- 기존 프로젝트의 `Group = 설비명/Label 등록됨` 의미를 유지할 수 있습니다.
+- Transformer/transform 시점의 좌표, scale, width, height 보정 로직을 넣지 않았습니다.
+- stroke 두께 역보정, edge-aligned rect 보정, `getAbsoluteScale()` 기반 보정을 모두 제거했습니다.
+- Konva가 변경하는 `x`, `y`, `width`, `height`, `scaleX`, `scaleY`, `rotation` 값을 그대로 사용합니다.
 
-The previous generated factories kept stroke thickness stable, but SVG border rects such as:
-
-```svg
-<rect x="0.5" y="0.5" width="29" height="29" stroke-width="1" />
-```
-
-could visually drift inward when resized.
-
-This version detects those outer-border rects and dynamically repositions the stroke centerline so the border's **outer edge remains attached to the shape boundary**, while the stroke thickness stays visually stable.
-
-## Port check
-
-`port.svg` contains an internal X line:
-
-```svg
-<path opacity="0.3" d="M1 29L29 1M29 29L1 1" stroke="black" stroke-opacity="0.5" stroke-width="0.5"/>
-```
-
-`portFactory.js` includes that same X path in `DRAW_COMMANDS`, so the internal X mark is preserved.
-
-## Usage example
+## 사용 예시
 
 ```js
-import { createPortShape, updatePortShapeByDrag } from '@/konva_svg_factories';
+import { createStockerShape, updateStockerShapeByDrag } from './konva_svg_factories_no_transform_fix';
 
-const node = createPortShape({
-  id: `port-${Date.now()}`,
+const node = createStockerShape({
+  id: `stocker-${Date.now()}`,
   x: 100,
   y: 100,
   width: 300,
-  height: 300,
+  height: 150,
   draggable: true,
 });
 
@@ -46,15 +28,13 @@ layer.add(node);
 layer.batchDraw();
 ```
 
-During drag:
+드래그 중 크기 변경:
 
 ```js
-updatePortShapeByDrag(node, startPoint, currentPoint);
+updateStockerShapeByDrag(node, startPoint, currentPoint);
 layer.batchDraw();
 ```
 
-## Notes
+## 주의
 
-- All factories return a single `Konva.Shape`, not a `Konva.Group`.
-- `Path2D` is used for SVG path rendering. This is supported by modern browsers.
-- `filter`, `mask`, and complex SVG effects are approximated. Basic fill/path/stroke geometry is preserved.
+이 버전은 stroke 두께를 고정하지 않습니다. Transform/resize 시 Konva/canvas transform에 따라 SVG 원본처럼 선 두께도 같이 커질 수 있습니다.

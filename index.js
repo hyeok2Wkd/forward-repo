@@ -15,3 +15,4 @@ export * from './vehicle2Factory';
 export * from './vehicle3Factory';
 export * from './zoneContainerFactory';
 export * from './zoneFactory';
+export * from './craneFactory';
