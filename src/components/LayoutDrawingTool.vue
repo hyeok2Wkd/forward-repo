@@ -54,6 +54,28 @@
             @change="normalizeStrokeWidthRatioInput"
           />
         </label>
+        <label class="color-control">
+          <span class="color-control__label">Fill</span>
+          <input
+            v-model="selectedFillColor"
+            class="color-control__input"
+            type="color"
+            :disabled="!selectedNode"
+            aria-label="Selected shape fill color"
+            @input="applySelectedFillColor"
+          />
+        </label>
+        <label class="color-control">
+          <span class="color-control__label">Line</span>
+          <input
+            v-model="selectedStrokeColor"
+            class="color-control__input"
+            type="color"
+            :disabled="!selectedNode"
+            aria-label="Selected shape stroke color"
+            @input="applySelectedStrokeColor"
+          />
+        </label>
         <button
           type="button"
           class="toolbar-button"
@@ -169,7 +191,10 @@ import { PALETTE_ITEMS, getShapeTypeFromNode } from '../konva/shapeFactoryRegist
 import { getSvgSourceForShapeType } from '../konva/svgSourceRegistry';
 import {
   DEFAULT_FIXED_STROKE_WIDTH_RATIO,
+  FILL_COLOR_ATTR,
+  STROKE_COLOR_ATTR,
   getFixedStrokeWidthRatio,
+  getShapeColorOverride,
   normalizeFixedStrokeWidthRatio,
 } from '../konvaSvgFactories/svgShapeFactoryUtils';
 import {
@@ -192,6 +217,8 @@ const STROKE_WIDTH_RATIO_STEP = 0.05;
 const STAGE_ZOOM_STEP = 1.08;
 const MIN_STAGE_SCALE = 0.2;
 const MAX_STAGE_SCALE = 5;
+const DEFAULT_FILL_COLOR = '#ffffff';
+const DEFAULT_STROKE_COLOR = '#000000';
 
 export default {
   name: 'LayoutDrawingTool',
@@ -207,6 +234,8 @@ export default {
       strokeWidthRatioMin: MIN_STROKE_WIDTH_RATIO,
       strokeWidthRatioMax: MAX_STROKE_WIDTH_RATIO,
       strokeWidthRatioStep: STROKE_WIDTH_RATIO_STEP,
+      selectedFillColor: DEFAULT_FILL_COLOR,
+      selectedStrokeColor: DEFAULT_STROKE_COLOR,
       stage: null,
       layer: null,
       transformer: null,
@@ -559,6 +588,7 @@ export default {
       if (!target) return;
 
       this.selectedNode = markRaw(target);
+      this.syncSelectedColors(target);
       this.attachTransformer(target);
     },
 
@@ -572,7 +602,45 @@ export default {
 
     clearSelection() {
       this.selectedNode = null;
+      this.selectedFillColor = DEFAULT_FILL_COLOR;
+      this.selectedStrokeColor = DEFAULT_STROKE_COLOR;
       this.attachTransformer(null);
+    },
+
+    applySelectedFillColor() {
+      this.applySelectedColor(FILL_COLOR_ATTR, this.selectedFillColor);
+    },
+
+    applySelectedStrokeColor() {
+      this.applySelectedColor(STROKE_COLOR_ATTR, this.selectedStrokeColor);
+    },
+
+    applySelectedColor(attrName, value) {
+      const target = getTransformerTarget(this.selectedNode) || this.selectedNode;
+      if (!target || !value) return;
+
+      target.setAttr(attrName, value);
+      if (this.layer) this.layer.batchDraw();
+
+      this.$emit('node-change', serializeNode(target));
+      this.saveLayout();
+    },
+
+    syncSelectedColors(node) {
+      const target = getTransformerTarget(node) || node;
+      const shape = findEquipmentShape(target) || target;
+
+      this.selectedFillColor = this.getColorControlValue(target, shape, FILL_COLOR_ATTR, DEFAULT_FILL_COLOR);
+      this.selectedStrokeColor = this.getColorControlValue(target, shape, STROKE_COLOR_ATTR, DEFAULT_STROKE_COLOR);
+    },
+
+    getColorControlValue(target, shape, attrName, fallback) {
+      if (target && typeof target.getAttr === 'function') {
+        const targetValue = target.getAttr(attrName);
+        if (targetValue) return targetValue;
+      }
+
+      return getShapeColorOverride(shape, attrName) || fallback;
     },
 
     deleteSelectedNode() {
@@ -1106,6 +1174,39 @@ export default {
 .stroke-ratio-control__input:focus {
   border-color: #2563eb;
   outline: none;
+}
+
+.color-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #c8d0dc;
+  border-radius: 6px;
+  background: #fbfcfe;
+  color: #1f2937;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.color-control__label {
+  font-weight: 700;
+}
+
+.color-control__input {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #b8c2d0;
+  border-radius: 4px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.color-control__input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .toolbar-error {

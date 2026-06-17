@@ -62,6 +62,8 @@ import {
 } from '../konvaSvgFactories';
 import {
   FIXED_STROKE_WIDTH_RATIO_ATTR,
+  FILL_COLOR_ATTR,
+  STROKE_COLOR_ATTR,
   normalizeFixedStrokeWidthRatio,
 } from '../konvaSvgFactories/svgShapeFactoryUtils';
 
@@ -318,6 +320,9 @@ function tagShapeNode(node, factory, sourceAttrs = {}) {
     layoutShapeType: factory.type,
     [FIXED_STROKE_WIDTH_RATIO_ATTR]: strokeWidthRatio,
   };
+
+  if (sourceAttrs.fillColor != null) attrs[FILL_COLOR_ATTR] = sourceAttrs.fillColor;
+  if (sourceAttrs.strokeColor != null) attrs[STROKE_COLOR_ATTR] = sourceAttrs.strokeColor;
 
   if (!node.getAttr('shapeType')) attrs.shapeType = factory.shapeType;
   if (!node.getAttr('equipmentType')) attrs.equipmentType = factory.shapeType;

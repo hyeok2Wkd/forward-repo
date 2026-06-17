@@ -7,7 +7,10 @@ import {
 } from './shapeFactoryRegistry';
 import {
   FIXED_STROKE_WIDTH_RATIO_ATTR,
+  FILL_COLOR_ATTR,
+  STROKE_COLOR_ATTR,
   getFixedStrokeWidthRatio,
+  getShapeColorOverride,
 } from '../konvaSvgFactories/svgShapeFactoryUtils';
 
 export const EQUIPMENT_GROUP_KIND = 'equipmentGroup';
@@ -122,6 +125,8 @@ export function serializeNode(node) {
       rotation: target.rotation(),
       draggable: target.draggable(),
       strokeWidthRatio: getNodeStrokeWidthRatio(shape),
+      fillColor: getNodeColorOverride(target, shape, FILL_COLOR_ATTR),
+      strokeColor: getNodeColorOverride(target, shape, STROKE_COLOR_ATTR),
       hasLabel: Boolean(labelText),
       labelText,
     };
@@ -143,6 +148,8 @@ export function serializeNode(node) {
       rotation: target.rotation(),
       draggable: target.draggable(),
       strokeWidthRatio: getNodeStrokeWidthRatio(target),
+      fillColor: getNodeColorOverride(target, target, FILL_COLOR_ATTR),
+      strokeColor: getNodeColorOverride(target, target, STROKE_COLOR_ATTR),
       hasLabel: false,
       labelText: '',
     };
@@ -297,6 +304,15 @@ function getNodeStrokeWidthRatio(node) {
   return node.getAttr(FIXED_STROKE_WIDTH_RATIO_ATTR) == null
     ? undefined
     : getFixedStrokeWidthRatio(node);
+}
+
+function getNodeColorOverride(target, shape, attrName) {
+  if (target && typeof target.getAttr === 'function') {
+    const targetValue = target.getAttr(attrName);
+    if (targetValue != null && targetValue !== '') return targetValue;
+  }
+
+  return getShapeColorOverride(shape, attrName);
 }
 
 function toNodeArray(collection) {

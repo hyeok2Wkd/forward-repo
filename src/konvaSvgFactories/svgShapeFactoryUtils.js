@@ -12,6 +12,8 @@ import Konva from 'konva';
 
 const pathCache = new Map();
 export const FIXED_STROKE_WIDTH_RATIO_ATTR = 'fixedStrokeWidthRatio';
+export const FILL_COLOR_ATTR = 'fillColor';
+export const STROKE_COLOR_ATTR = 'strokeColor';
 export const DEFAULT_FIXED_STROKE_WIDTH_RATIO = 3;
 
 export function normalizeFixedStrokeWidthRatio(value, fallback = DEFAULT_FIXED_STROKE_WIDTH_RATIO) {
@@ -34,6 +36,38 @@ export function getFixedStrokeWidthRatio(shape) {
   return normalizeFixedStrokeWidthRatio(value);
 }
 
+export function getShapeColorOverride(shape, attrName) {
+  if (!shape || typeof shape.getAttr !== 'function') return undefined;
+
+  const value = shape.getAttr(attrName);
+  if (value != null && value !== '') return value;
+
+  const parent = typeof shape.getParent === 'function' ? shape.getParent() : null;
+  if (!parent || typeof parent.getAttr !== 'function') return undefined;
+
+  const parentValue = parent.getAttr(attrName);
+  return parentValue != null && parentValue !== '' ? parentValue : undefined;
+}
+
+function getShapeStyleOverrides(shape) {
+  return {
+    fillColor: getShapeColorOverride(shape, FILL_COLOR_ATTR),
+    strokeColor: getShapeColorOverride(shape, STROKE_COLOR_ATTR),
+  };
+}
+
+function resolveCommandFill(command, styleOverrides, fallback) {
+  return styleOverrides && styleOverrides.fillColor
+    ? styleOverrides.fillColor
+    : command.fill || fallback;
+}
+
+function resolveCommandStroke(command, styleOverrides, fallback) {
+  return styleOverrides && styleOverrides.strokeColor
+    ? styleOverrides.strokeColor
+    : command.stroke || fallback;
+}
+
 export function createSvgLikeShape({
   id,
   shapeType,
@@ -50,6 +84,8 @@ export function createSvgLikeShape({
   rotation = 0,
   draggable = true,
   strokeWidthRatio = DEFAULT_FIXED_STROKE_WIDTH_RATIO,
+  fillColor,
+  strokeColor,
 } = {}) {
   const safeWidth = Math.max(width || baseWidth || viewBox.width || 1, 1);
   const safeHeight = Math.max(height || baseHeight || viewBox.height || 1, 1);
@@ -72,6 +108,8 @@ export function createSvgLikeShape({
     svgBaseWidth: baseWidth,
     svgBaseHeight: baseHeight,
     [FIXED_STROKE_WIDTH_RATIO_ATTR]: normalizeFixedStrokeWidthRatio(strokeWidthRatio),
+    [FILL_COLOR_ATTR]: fillColor,
+    [STROKE_COLOR_ATTR]: strokeColor,
 
     // hitFunc uses fillStrokeShape, so provide a fill only for hit canvas.
     // It is not used by sceneFunc.
@@ -105,6 +143,8 @@ export function serializeSvgLikeShape(shape) {
     rotation: shape.rotation(),
     draggable: shape.draggable(),
     strokeWidthRatio: getFixedStrokeWidthRatio(shape),
+    fillColor: getShapeColorOverride(shape, FILL_COLOR_ATTR),
+    strokeColor: getShapeColorOverride(shape, STROKE_COLOR_ATTR),
   };
 }
 
@@ -117,6 +157,7 @@ function drawSvgLikeScene(context, shape, commands, viewBox) {
   const scaleY = height / Math.max(viewBox.height, 1);
   const canvasPixelScale = getCanvasPixelScale(ctx, shape);
   const shapeScale = getShapeScale(shape, viewBox, canvasPixelScale);
+  const styleOverrides = getShapeStyleOverrides(shape);
 
   ctx.save();
 
@@ -130,50 +171,50 @@ function drawSvgLikeScene(context, shape, commands, viewBox) {
   ctx.clip();
 
   for (const command of commands) {
-    drawCommand(ctx, command, viewBox, shapeScale);
+    drawCommand(ctx, command, viewBox, shapeScale, styleOverrides);
   }
 
   ctx.restore();
 }
 
-function drawCommand(ctx, command, viewBox, shapeScale) {
+function drawCommand(ctx, command, viewBox, shapeScale, styleOverrides) {
   ctx.save();
   ctx.globalAlpha = command.opacity == null ? 1 : command.opacity;
   ctx.setLineDash([]);
 
   if (command.type === 'fixedLine') {
-    drawFixedLine(ctx, command, viewBox, shapeScale);
+    drawFixedLine(ctx, command, viewBox, shapeScale, styleOverrides);
     ctx.restore();
     return;
   }
 
   if (command.type === 'fixedRectGrid') {
-    drawFixedRectGrid(ctx, command, viewBox);
+    drawFixedRectGrid(ctx, command, viewBox, styleOverrides);
     ctx.restore();
     return;
   }
 
   if (command.type === 'fixedEllipseStroke') {
-    drawFixedEllipseStroke(ctx, command, shapeScale);
+    drawFixedEllipseStroke(ctx, command, shapeScale, styleOverrides);
     ctx.restore();
     return;
   }
 
   if (command.type === 'fixedPolygonStroke') {
-    drawFixedPolygonStroke(ctx, command, shapeScale);
+    drawFixedPolygonStroke(ctx, command, shapeScale, styleOverrides);
     ctx.restore();
     return;
   }
 
   if (command.type === 'fixedChamferOctagon') {
-    drawFixedChamferOctagon(ctx, command, viewBox, shapeScale);
+    drawFixedChamferOctagon(ctx, command, viewBox, shapeScale, styleOverrides);
     ctx.restore();
     return;
   }
 
   if (command.type === 'path') {
     const path = getPath(command.data);
-    if (path) paintPath(ctx, path, command, shapeScale);
+    if (path) paintPath(ctx, path, command, shapeScale, styleOverrides);
     ctx.restore();
     return;
   }
@@ -183,12 +224,12 @@ function drawCommand(ctx, command, viewBox, shapeScale) {
   if (command.type === 'rect') {
     if (command.fill) {
       createPrimitivePath(ctx, command);
-      ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
+      ctx.fillStyle = applyOpacity(resolveCommandFill(command, styleOverrides), command.fillOpacity);
       ctx.fill(command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
     }
 
     if (command.stroke) {
-      drawEdgeAlignedRectStroke(ctx, command, shapeScale);
+      drawEdgeAlignedRectStroke(ctx, command, shapeScale, styleOverrides);
     }
 
     ctx.restore();
@@ -196,11 +237,11 @@ function drawCommand(ctx, command, viewBox, shapeScale) {
   }
 
   createPrimitivePath(ctx, command);
-  paintCurrentPath(ctx, command, shapeScale);
+  paintCurrentPath(ctx, command, shapeScale, styleOverrides);
   ctx.restore();
 }
 
-function drawFixedLine(ctx, command, viewBox, shapeScale) {
+function drawFixedLine(ctx, command, viewBox, shapeScale, styleOverrides) {
   const { scaleX, scaleY, maxScale } = getCurrentCanvasScale(ctx);
   const edge = command.edge;
   const isHorizontal = edge === 'top'
@@ -262,7 +303,7 @@ function drawFixedLine(ctx, command, viewBox, shapeScale) {
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
-  ctx.strokeStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.strokeStyle = applyOpacity(resolveCommandStroke(command, styleOverrides, 'black'), command.strokeOpacity);
   ctx.lineWidth = localLineWidth;
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
@@ -277,7 +318,7 @@ function drawFixedLine(ctx, command, viewBox, shapeScale) {
   ctx.stroke();
 }
 
-function drawFixedRectGrid(ctx, command, viewBox) {
+function drawFixedRectGrid(ctx, command, viewBox, styleOverrides) {
   const { scaleX, scaleY } = getCurrentCanvasScale(ctx);
   const usesDesignScale = command.sizingMode === 'heightScale';
   const horizontalDesignRatio = usesDesignScale
@@ -324,7 +365,7 @@ function drawFixedRectGrid(ctx, command, viewBox) {
   const startX = minX + Math.max((availableWidth - usedWidth) / 2, 0);
   const startY = minY + Math.max((availableHeight - usedHeight) / 2, 0);
 
-  ctx.fillStyle = applyOpacity(command.fill || 'black', command.fillOpacity);
+  ctx.fillStyle = applyOpacity(resolveCommandFill(command, styleOverrides, 'black'), command.fillOpacity);
 
   for (let row = 0; row < rowCount; row += 1) {
     const y = startY + row * stepY;
@@ -335,7 +376,7 @@ function drawFixedRectGrid(ctx, command, viewBox) {
   }
 }
 
-function drawFixedEllipseStroke(ctx, command, shapeScale) {
+function drawFixedEllipseStroke(ctx, command, shapeScale, styleOverrides) {
   const { maxScale } = getCurrentCanvasScale(ctx);
   const strokeWidth = command.strokeWidth || 1;
   const localLineWidth = (strokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
@@ -348,7 +389,7 @@ function drawFixedEllipseStroke(ctx, command, shapeScale) {
   ctx.beginPath();
   ctx.ellipse(command.cx || 0, command.cy || 0, rx, ry, 0, 0, Math.PI * 2);
   ctx.closePath();
-  ctx.strokeStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.strokeStyle = applyOpacity(resolveCommandStroke(command, styleOverrides, 'black'), command.strokeOpacity);
   ctx.lineWidth = localLineWidth;
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
@@ -363,12 +404,12 @@ function drawFixedEllipseStroke(ctx, command, shapeScale) {
   ctx.stroke();
 }
 
-function drawFixedPolygonStroke(ctx, command, shapeScale) {
+function drawFixedPolygonStroke(ctx, command, shapeScale, styleOverrides) {
   const points = command.points || [];
   if (points.length < 2) return;
 
   if (command.edgeAligned !== false && command.closed !== false && !Array.isArray(command.dash) && points.length > 2) {
-    drawEdgeAlignedPolygonStroke(ctx, command, points, shapeScale);
+    drawEdgeAlignedPolygonStroke(ctx, command, points, shapeScale, styleOverrides);
     return;
   }
 
@@ -389,7 +430,7 @@ function drawFixedPolygonStroke(ctx, command, shapeScale) {
   }
   if (command.closed !== false) ctx.closePath();
 
-  ctx.strokeStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.strokeStyle = applyOpacity(resolveCommandStroke(command, styleOverrides, 'black'), command.strokeOpacity);
   ctx.lineWidth = localLineWidth;
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
@@ -404,19 +445,19 @@ function drawFixedPolygonStroke(ctx, command, shapeScale) {
   ctx.stroke();
 }
 
-function drawFixedChamferOctagon(ctx, command, viewBox, shapeScale) {
+function drawFixedChamferOctagon(ctx, command, viewBox, shapeScale, styleOverrides) {
   const points = getFixedChamferOctagonPoints(ctx, command, viewBox);
   if (points.length < 8) return;
 
   if (command.fill) {
     ctx.beginPath();
     drawPolygonPath(ctx, points);
-    ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
+    ctx.fillStyle = applyOpacity(resolveCommandFill(command, styleOverrides), command.fillOpacity);
     ctx.fill(command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
   }
 
   if (command.stroke) {
-    drawEdgeAlignedPolygonStroke(ctx, { ...command, points }, points, shapeScale);
+    drawEdgeAlignedPolygonStroke(ctx, { ...command, points }, points, shapeScale, styleOverrides);
   }
 }
 
@@ -446,14 +487,14 @@ function getFixedChamferOctagonPoints(ctx, command, viewBox) {
   ];
 }
 
-function drawEdgeAlignedPolygonStroke(ctx, command, points, shapeScale) {
+function drawEdgeAlignedPolygonStroke(ctx, command, points, shapeScale, styleOverrides) {
   const matrix = ctx && typeof ctx.getTransform === 'function'
     ? ctx.getTransform()
     : null;
   const targetStrokeWidth = (command.strokeWidth || 1) * shapeScale.strokeMaxScale;
 
   if (!matrix || targetStrokeWidth <= 0) {
-    drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale);
+    drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale, styleOverrides);
     return;
   }
 
@@ -462,18 +503,18 @@ function drawEdgeAlignedPolygonStroke(ctx, command, points, shapeScale) {
   const innerPoints = innerCanvasPoints.map((point) => inverseTransformPoint(matrix, point));
 
   if (innerPoints.some((point) => !point)) {
-    drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale);
+    drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale, styleOverrides);
     return;
   }
 
   ctx.beginPath();
   drawPolygonPath(ctx, points);
   drawPolygonPath(ctx, innerPoints);
-  ctx.fillStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.fillStyle = applyOpacity(resolveCommandStroke(command, styleOverrides, 'black'), command.strokeOpacity);
   ctx.fill('evenodd');
 }
 
-function drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale) {
+function drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale, styleOverrides) {
   const { maxScale } = getCurrentCanvasScale(ctx);
   const strokeWidth = command.strokeWidth || 1;
   const localLineWidth = (strokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
@@ -484,7 +525,7 @@ function drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale) {
 
   ctx.beginPath();
   drawPolygonPath(ctx, strokePoints);
-  ctx.strokeStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.strokeStyle = applyOpacity(resolveCommandStroke(command, styleOverrides, 'black'), command.strokeOpacity);
   ctx.lineWidth = localLineWidth;
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
@@ -590,41 +631,41 @@ function getPath(data) {
   return pathCache.get(data);
 }
 
-function paintPath(ctx, path, command, shapeScale) {
+function paintPath(ctx, path, command, shapeScale, styleOverrides) {
   if (command.fill) {
-    ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
+    ctx.fillStyle = applyOpacity(resolveCommandFill(command, styleOverrides), command.fillOpacity);
     ctx.fill(path, command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
   }
 
   if (command.stroke) {
-    applyStroke(ctx, command, shapeScale);
+    applyStroke(ctx, command, shapeScale, styleOverrides);
     ctx.stroke(path);
   }
 }
 
-function paintCurrentPath(ctx, command, shapeScale) {
+function paintCurrentPath(ctx, command, shapeScale, styleOverrides) {
   if (command.fill) {
-    ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
+    ctx.fillStyle = applyOpacity(resolveCommandFill(command, styleOverrides), command.fillOpacity);
     ctx.fill(command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
   }
 
   if (command.stroke) {
-    applyStroke(ctx, command, shapeScale);
+    applyStroke(ctx, command, shapeScale, styleOverrides);
     ctx.stroke();
   }
 }
 
-function applyStroke(ctx, command, shapeScale) {
+function applyStroke(ctx, command, shapeScale, styleOverrides) {
   if (command.fixedStroke === false) {
-    applyScaledStroke(ctx, command);
+    applyScaledStroke(ctx, command, styleOverrides);
     return;
   }
 
-  applyFixedStroke(ctx, command, shapeScale);
+  applyFixedStroke(ctx, command, shapeScale, styleOverrides);
 }
 
-function applyScaledStroke(ctx, command) {
-  ctx.strokeStyle = applyOpacity(command.stroke, command.strokeOpacity);
+function applyScaledStroke(ctx, command, styleOverrides) {
+  ctx.strokeStyle = applyOpacity(resolveCommandStroke(command, styleOverrides), command.strokeOpacity);
   ctx.lineWidth = command.strokeWidth || 1;
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
@@ -635,12 +676,12 @@ function applyScaledStroke(ctx, command) {
   }
 }
 
-function applyFixedStroke(ctx, command, shapeScale) {
+function applyFixedStroke(ctx, command, shapeScale, styleOverrides) {
   const { maxScale } = getCurrentCanvasScale(ctx);
   const strokeWidth = command.strokeWidth || 1;
   const localLineWidth = (strokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
 
-  ctx.strokeStyle = applyOpacity(command.stroke, command.strokeOpacity);
+  ctx.strokeStyle = applyOpacity(resolveCommandStroke(command, styleOverrides), command.strokeOpacity);
   ctx.lineWidth = localLineWidth;
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
@@ -653,9 +694,9 @@ function applyFixedStroke(ctx, command, shapeScale) {
   }
 }
 
-function drawEdgeAlignedRectStroke(ctx, command, shapeScale) {
+function drawEdgeAlignedRectStroke(ctx, command, shapeScale, styleOverrides) {
   if (Array.isArray(command.dash) && command.dash.length) {
-    drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale);
+    drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale, styleOverrides);
     return;
   }
 
@@ -712,11 +753,11 @@ function drawEdgeAlignedRectStroke(ctx, command, shapeScale) {
     );
   }
 
-  ctx.fillStyle = applyOpacity(command.stroke, command.strokeOpacity);
+  ctx.fillStyle = applyOpacity(resolveCommandStroke(command, styleOverrides), command.strokeOpacity);
   ctx.fill('evenodd');
 }
 
-function drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale) {
+function drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale, styleOverrides) {
   const { maxScale } = getCurrentCanvasScale(ctx);
   const originalStrokeWidth = command.strokeWidth || 1;
   const localLineWidth = (originalStrokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
@@ -745,7 +786,7 @@ function drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale) {
     ry
   );
 
-  ctx.strokeStyle = applyOpacity(command.stroke, command.strokeOpacity);
+  ctx.strokeStyle = applyOpacity(resolveCommandStroke(command, styleOverrides), command.strokeOpacity);
   ctx.lineWidth = localLineWidth;
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
