@@ -127,6 +127,10 @@ export function serializeNode(node) {
       strokeWidthRatio: getNodeStrokeWidthRatio(shape),
       fillColor: getNodeColorOverride(target, shape, FILL_COLOR_ATTR),
       strokeColor: getNodeColorOverride(target, shape, STROKE_COLOR_ATTR),
+      equipmentCategory: readNodeAttr(target, 'equipmentCategory') || readNodeAttr(shape, 'equipmentCategory'),
+      equipmentState: readNodeAttr(target, 'equipmentState') || readNodeAttr(shape, 'equipmentState'),
+      equipmentStatus: readNodeAttr(target, 'equipmentStatus') || readNodeAttr(shape, 'equipmentStatus'),
+      rgb: readNodeAttr(target, 'rgb') || readNodeAttr(shape, 'rgb'),
       hasLabel: Boolean(labelText),
       labelText,
     };
@@ -150,6 +154,10 @@ export function serializeNode(node) {
       strokeWidthRatio: getNodeStrokeWidthRatio(target),
       fillColor: getNodeColorOverride(target, target, FILL_COLOR_ATTR),
       strokeColor: getNodeColorOverride(target, target, STROKE_COLOR_ATTR),
+      equipmentCategory: readNodeAttr(target, 'equipmentCategory'),
+      equipmentState: readNodeAttr(target, 'equipmentState'),
+      equipmentStatus: readNodeAttr(target, 'equipmentStatus'),
+      rgb: readNodeAttr(target, 'rgb'),
       hasLabel: false,
       labelText: '',
     };
@@ -169,10 +177,13 @@ export function restoreNodeFromData(data = {}) {
     type,
     draggable: data.draggable !== false,
   });
+  applySerializedAttrs(shape, data);
 
   const nameText = data.name || data.labelText || '';
   if (data.hasLabel || nameText) {
-    return wrapShapeWithLabelGroup(shape, nameText);
+    const group = wrapShapeWithLabelGroup(shape, nameText);
+    applySerializedAttrs(group, data);
+    return group;
   }
 
   return shape;
@@ -297,6 +308,33 @@ function readNodeMethod(node, methodName) {
   return node && typeof node[methodName] === 'function'
     ? node[methodName]()
     : undefined;
+}
+
+function readNodeAttr(node, attrName) {
+  return node && typeof node.getAttr === 'function'
+    ? node.getAttr(attrName)
+    : undefined;
+}
+
+function applySerializedAttrs(node, data = {}) {
+  if (!node || typeof node.setAttrs !== 'function') return;
+
+  const attrs = {};
+  setDefinedAttr(attrs, FIXED_STROKE_WIDTH_RATIO_ATTR, data.strokeWidthRatio);
+  setDefinedAttr(attrs, FILL_COLOR_ATTR, data.fillColor);
+  setDefinedAttr(attrs, STROKE_COLOR_ATTR, data.strokeColor);
+  setDefinedAttr(attrs, 'equipmentCategory', data.equipmentCategory);
+  setDefinedAttr(attrs, 'equipmentState', data.equipmentState);
+  setDefinedAttr(attrs, 'equipmentStatus', data.equipmentStatus);
+  setDefinedAttr(attrs, 'rgb', data.rgb);
+
+  node.setAttrs(attrs);
+}
+
+function setDefinedAttr(attrs, key, value) {
+  if (value !== undefined && value !== null && value !== '') {
+    attrs[key] = value;
+  }
 }
 
 function getNodeStrokeWidthRatio(node) {

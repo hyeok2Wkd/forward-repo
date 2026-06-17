@@ -47,6 +47,7 @@ const DRAW_COMMANDS = [
     opacity: 1,
     fill: 'black',
     fillOpacity: 0.5,
+    fillColorOverride: false,
     data:
       'M11 1C11 0.447715 10.5523 0 10 0C9.44772 0 9 0.447715 9 1H10H11ZM21 1C21 0.447715 20.5523 0 20 0C19.4477 0 19 0.447715 19 1H20H21ZM10 1H9V20H10H11V1H10ZM20 1H19V20H20H21V1H20Z',
   },
@@ -57,6 +58,7 @@ const DRAW_COMMANDS = [
     strokeOpacity: 0.5,
     strokeWidth: 3.0,
     lineCap: 'round',
+    strokeColorOverride: false,
     data: 'M24 20.9852L6 20.9852',
   },
 ];

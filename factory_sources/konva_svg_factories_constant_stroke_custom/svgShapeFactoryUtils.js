@@ -57,12 +57,20 @@ function getShapeStyleOverrides(shape) {
 }
 
 function resolveCommandFill(command, styleOverrides, fallback) {
+  if (command.fillColorOverride === false || command.colorOverride === false) {
+    return command.fill || fallback;
+  }
+
   return styleOverrides && styleOverrides.fillColor
     ? styleOverrides.fillColor
     : command.fill || fallback;
 }
 
 function resolveCommandStroke(command, styleOverrides, fallback) {
+  if (command.strokeColorOverride === false || command.colorOverride === false) {
+    return command.stroke || fallback;
+  }
+
   return styleOverrides && styleOverrides.strokeColor
     ? styleOverrides.strokeColor
     : command.stroke || fallback;

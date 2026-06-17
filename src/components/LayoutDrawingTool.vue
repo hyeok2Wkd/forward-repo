@@ -22,6 +22,9 @@
         <button type="button" class="toolbar-button" @click="restoreLayoutFromJson">
           Restore JSON
         </button>
+        <button type="button" class="toolbar-button" @click="loadEquipmentStateRgbTable">
+          Load State RGB
+        </button>
         <button
           type="button"
           class="toolbar-button"
@@ -186,12 +189,15 @@
 <script>
 import Konva from 'konva';
 import { markRaw } from 'vue';
+import equipmentStateRgbTableMarkdown from '../../data/equipment_state_rgb_table.md?raw';
 import ToolPalette from './ToolPalette.vue';
+import { createMappedEquipmentStateItems } from '../konva/equipmentStateTable';
 import { PALETTE_ITEMS, getShapeTypeFromNode } from '../konva/shapeFactoryRegistry';
 import { getSvgSourceForShapeType } from '../konva/svgSourceRegistry';
 import {
   DEFAULT_FIXED_STROKE_WIDTH_RATIO,
   FILL_COLOR_ATTR,
+  FIXED_STROKE_WIDTH_RATIO_ATTR,
   STROKE_COLOR_ATTR,
   getFixedStrokeWidthRatio,
   getShapeColorOverride,
@@ -219,6 +225,12 @@ const MIN_STAGE_SCALE = 0.2;
 const MAX_STAGE_SCALE = 5;
 const DEFAULT_FILL_COLOR = '#ffffff';
 const DEFAULT_STROKE_COLOR = '#000000';
+const STATE_TABLE_ITEM_WIDTH = 126;
+const STATE_TABLE_ITEM_HEIGHT = 58;
+const STATE_TABLE_GAP_X = 20;
+const STATE_TABLE_GAP_Y = 24;
+const STATE_TABLE_START_X = 32;
+const STATE_TABLE_START_Y = 32;
 
 export default {
   name: 'LayoutDrawingTool',
@@ -797,6 +809,92 @@ export default {
       this.transformer.moveToTop();
       this.layer.batchDraw();
       this.saveLayout();
+    },
+
+    loadEquipmentStateRgbTable() {
+      if (!this.layer) return;
+
+      const items = createMappedEquipmentStateItems(equipmentStateRgbTableMarkdown);
+      if (!items.length) {
+        this.errorMessage = 'No mapped state RGB rows found.';
+        return;
+      }
+
+      this.closeLabelEditor();
+      this.closeSvgCompare();
+      this.clearSelection();
+      this.destroyEquipmentNodes();
+
+      items.forEach((item, index) => {
+        const node = this.createStateRgbNode(item, index);
+        this.layer.add(node);
+        this.registerEquipmentNode(node);
+      });
+
+      this.transformer.moveToTop();
+      this.layer.batchDraw();
+      this.errorMessage = '';
+      this.saveLayout();
+    },
+
+    createStateRgbNode(item, index) {
+      const columnCount = this.getStateTableColumnCount();
+      const column = index % columnCount;
+      const row = Math.floor(index / columnCount);
+      const x = STATE_TABLE_START_X + column * (STATE_TABLE_ITEM_WIDTH + STATE_TABLE_GAP_X);
+      const y = STATE_TABLE_START_Y + row * (STATE_TABLE_ITEM_HEIGHT + STATE_TABLE_GAP_Y);
+      const shape = markRaw(createNodeFromType(item.shapeType, {
+        id: this.createNodeId(`${item.shapeType}-${item.state}`),
+        x,
+        y,
+        width: STATE_TABLE_ITEM_WIDTH,
+        height: STATE_TABLE_ITEM_HEIGHT,
+        draggable: true,
+        strokeWidthRatio: this.normalizedStrokeWidthRatio,
+        fillColor: item.fillColor,
+        strokeColor: item.shapeType === 'crane' ? item.fillColor : undefined,
+      }));
+
+      shape.setAttrs({
+        equipmentCategory: item.equipmentType,
+        equipmentState: item.state,
+        equipmentStatus: item.status,
+        [FILL_COLOR_ATTR]: item.fillColor,
+        [STROKE_COLOR_ATTR]: item.shapeType === 'crane' ? item.fillColor : undefined,
+        [FIXED_STROKE_WIDTH_RATIO_ATTR]: this.normalizedStrokeWidthRatio,
+        rgb: {
+          r: item.red,
+          g: item.green,
+          b: item.blue,
+        },
+      });
+
+      const group = markRaw(wrapShapeWithLabelGroup(shape, item.state));
+      group.setAttrs({
+        equipmentCategory: item.equipmentType,
+        equipmentState: item.state,
+        equipmentStatus: item.status,
+        fillColor: item.fillColor,
+        strokeColor: item.shapeType === 'crane' ? item.fillColor : undefined,
+        rgb: {
+          r: item.red,
+          g: item.green,
+          b: item.blue,
+        },
+      });
+
+      return group;
+    },
+
+    getStateTableColumnCount() {
+      const stageWidth = this.stage && typeof this.stage.width === 'function'
+        ? this.stage.width()
+        : 1100;
+      const availableWidth = Math.max(stageWidth - STATE_TABLE_START_X * 2, STATE_TABLE_ITEM_WIDTH);
+      return Math.max(
+        Math.floor((availableWidth + STATE_TABLE_GAP_X) / (STATE_TABLE_ITEM_WIDTH + STATE_TABLE_GAP_X)),
+        1
+      );
     },
 
     normalizeLayoutPayload(payload) {
