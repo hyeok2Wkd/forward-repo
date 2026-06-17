@@ -12,7 +12,7 @@ import Konva from 'konva';
 
 const pathCache = new Map();
 export const FIXED_STROKE_WIDTH_RATIO_ATTR = 'fixedStrokeWidthRatio';
-export const DEFAULT_FIXED_STROKE_WIDTH_RATIO = 2;
+export const DEFAULT_FIXED_STROKE_WIDTH_RATIO = 4;
 
 export function normalizeFixedStrokeWidthRatio(value, fallback = DEFAULT_FIXED_STROKE_WIDTH_RATIO) {
   const numericValue = Number(value);
@@ -161,6 +161,12 @@ function drawCommand(ctx, command, viewBox, shapeScale) {
 
   if (command.type === 'fixedPolygonStroke') {
     drawFixedPolygonStroke(ctx, command, shapeScale);
+    ctx.restore();
+    return;
+  }
+
+  if (command.type === 'fixedChamferOctagon') {
+    drawFixedChamferOctagon(ctx, command, viewBox, shapeScale);
     ctx.restore();
     return;
   }
@@ -396,6 +402,48 @@ function drawFixedPolygonStroke(ctx, command, shapeScale) {
   }
 
   ctx.stroke();
+}
+
+function drawFixedChamferOctagon(ctx, command, viewBox, shapeScale) {
+  const points = getFixedChamferOctagonPoints(ctx, command, viewBox);
+  if (points.length < 8) return;
+
+  if (command.fill) {
+    ctx.beginPath();
+    drawPolygonPath(ctx, points);
+    ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
+    ctx.fill(command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
+  }
+
+  if (command.stroke) {
+    drawEdgeAlignedPolygonStroke(ctx, { ...command, points }, points, shapeScale);
+  }
+}
+
+function getFixedChamferOctagonPoints(ctx, command, viewBox) {
+  const { scaleX, scaleY } = getCurrentCanvasScale(ctx);
+  const x = command.x == null ? viewBox.x : command.x;
+  const y = command.y == null ? viewBox.y : command.y;
+  const width = command.width == null ? viewBox.width : command.width;
+  const height = command.height == null ? viewBox.height : command.height;
+  const chamferX = Math.max(command.chamferX || 0, 0);
+  const chamferY = Math.max(command.chamferY || 0, 0);
+  const slopeLockedChamferX = chamferX * (scaleY / Math.max(scaleX, 0.0001));
+  const clampedChamferX = Math.min(slopeLockedChamferX, width / 2);
+  const clampedChamferY = Math.min(chamferY, height / 2);
+  const right = x + width;
+  const bottom = y + height;
+
+  return [
+    { x: x + clampedChamferX, y },
+    { x: right - clampedChamferX, y },
+    { x: right, y: y + clampedChamferY },
+    { x: right, y: bottom - clampedChamferY },
+    { x: right - clampedChamferX, y: bottom },
+    { x: x + clampedChamferX, y: bottom },
+    { x, y: bottom - clampedChamferY },
+    { x, y: y + clampedChamferY },
+  ];
 }
 
 function drawEdgeAlignedPolygonStroke(ctx, command, points, shapeScale) {

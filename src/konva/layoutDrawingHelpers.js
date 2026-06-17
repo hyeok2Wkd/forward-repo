@@ -12,7 +12,7 @@ import {
 
 export const EQUIPMENT_GROUP_KIND = 'equipmentGroup';
 export const LABEL_ROLE = 'equipmentLabel';
-export const DEFAULT_LABEL_GAP = 6;
+export const DEFAULT_LABEL_FONT_SIZE = 13;
 
 export function normalizeDragRect(start, current) {
   if (!start || !current) {
@@ -112,6 +112,7 @@ export function serializeNode(node) {
     return {
       id: target.id(),
       type,
+      name: labelText,
       x: target.x(),
       y: target.y(),
       width: readNodeMethod(shape, 'width'),
@@ -132,6 +133,7 @@ export function serializeNode(node) {
     return {
       id: target.id(),
       type,
+      name: '',
       x: target.x(),
       y: target.y(),
       width: readNodeMethod(target, 'width'),
@@ -161,8 +163,9 @@ export function restoreNodeFromData(data = {}) {
     draggable: data.draggable !== false,
   });
 
-  if (data.hasLabel) {
-    return wrapShapeWithLabelGroup(shape, data.labelText || '');
+  const nameText = data.name || data.labelText || '';
+  if (data.hasLabel || nameText) {
+    return wrapShapeWithLabelGroup(shape, nameText);
   }
 
   return shape;
@@ -180,19 +183,23 @@ export function setGroupLabelText(group, labelText = '') {
 
   const width = Math.max(readNodeMethod(shape, 'width') || 1, 1);
   const height = Math.max(readNodeMethod(shape, 'height') || 1, 1);
+  const fontSize = Math.min(DEFAULT_LABEL_FONT_SIZE, Math.max(8, Math.floor(height * 0.42)));
   let labelNode = findLabelTextNode(group);
 
   if (!labelNode) {
     labelNode = new Konva.Text({
       x: 0,
-      y: height + DEFAULT_LABEL_GAP,
+      y: 0,
       width,
+      height,
       text: '',
-      fontSize: 13,
+      fontSize,
       fontFamily: 'Arial, sans-serif',
+      fontStyle: 'bold',
       fill: '#111827',
       align: 'center',
       verticalAlign: 'middle',
+      ellipsis: true,
       listening: true,
       labelRole: LABEL_ROLE,
     });
@@ -201,14 +208,18 @@ export function setGroupLabelText(group, labelText = '') {
 
   labelNode.setAttrs({
     x: 0,
-    y: height + DEFAULT_LABEL_GAP,
+    y: 0,
     width,
+    height,
     text: labelText,
+    fontSize,
     align: 'center',
+    verticalAlign: 'middle',
     labelRole: LABEL_ROLE,
   });
 
   group.setAttr('labelText', labelText);
+  group.setAttr('equipmentName', labelText);
   return labelNode;
 }
 

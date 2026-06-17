@@ -82,11 +82,12 @@
             v-model="labelEditor.value"
             class="label-editor__input"
             type="text"
+            placeholder="Name"
             autocomplete="off"
             @keydown.esc.prevent="closeLabelEditor"
           />
           <div class="label-editor__actions">
-            <button type="submit" class="label-editor__button">Apply</button>
+            <button type="submit" class="label-editor__button">OK</button>
             <button type="button" class="label-editor__button" @click="closeLabelEditor">
               Cancel
             </button>
