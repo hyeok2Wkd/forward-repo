@@ -60,6 +60,10 @@ import {
   restoreZoneShape,
   serializeZoneShape,
 } from '../konvaSvgFactories';
+import {
+  FIXED_STROKE_WIDTH_RATIO_ATTR,
+  normalizeFixedStrokeWidthRatio,
+} from '../konvaSvgFactories/svgShapeFactoryUtils';
 
 export const SHAPE_FACTORY_REGISTRY = Object.freeze({
   stocker: {
@@ -269,7 +273,7 @@ export function createShapeNode(type, attrs = {}) {
     draggable: attrs.draggable !== false,
   });
 
-  tagShapeNode(node, factory);
+  tagShapeNode(node, factory, attrs);
   return node;
 }
 
@@ -288,15 +292,22 @@ export function restoreShapeNode(data = {}) {
     ? factory.restore(restoreData)
     : factory.create(restoreData);
 
-  tagShapeNode(node, factory);
+  tagShapeNode(node, factory, restoreData);
   return node;
 }
 
-function tagShapeNode(node, factory) {
+function tagShapeNode(node, factory, sourceAttrs = {}) {
   if (!node || typeof node.setAttrs !== 'function') return;
+
+  const strokeWidthRatio = normalizeFixedStrokeWidthRatio(
+    sourceAttrs.strokeWidthRatio
+      ?? sourceAttrs[FIXED_STROKE_WIDTH_RATIO_ATTR]
+      ?? node.getAttr(FIXED_STROKE_WIDTH_RATIO_ATTR)
+  );
 
   const attrs = {
     layoutShapeType: factory.type,
+    [FIXED_STROKE_WIDTH_RATIO_ATTR]: strokeWidthRatio,
   };
 
   if (!node.getAttr('shapeType')) attrs.shapeType = factory.shapeType;

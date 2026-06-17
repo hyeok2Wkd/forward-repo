@@ -5,13 +5,34 @@
 // 2. No Konva node `name` is assigned.
 // 3. No drag/transform coordinate correction helpers are included.
 //    Keep Konva's x/y/width/height/scaleX/scaleY/rotation exactly as they are.
-// 4. Stroke width is fixed at the pixel width produced by rendering the SVG
-//    at this Shape's width/height, then kept stable against later transforms.
+// 4. Stroke width is fixed in screen pixels, independent of Shape size and transforms.
 // 5. Rect strokes are edge-aligned so their outside edge stays on the SVG boundary.
 
 import Konva from 'konva';
 
 const pathCache = new Map();
+export const FIXED_STROKE_WIDTH_RATIO_ATTR = 'fixedStrokeWidthRatio';
+export const DEFAULT_FIXED_STROKE_WIDTH_RATIO = 2;
+
+export function normalizeFixedStrokeWidthRatio(value, fallback = DEFAULT_FIXED_STROKE_WIDTH_RATIO) {
+  const numericValue = Number(value);
+  const fallbackValue = Number(fallback);
+  const safeFallback = Number.isFinite(fallbackValue) && fallbackValue > 0
+    ? fallbackValue
+    : DEFAULT_FIXED_STROKE_WIDTH_RATIO;
+
+  return Number.isFinite(numericValue) && numericValue > 0
+    ? numericValue
+    : safeFallback;
+}
+
+export function getFixedStrokeWidthRatio(shape) {
+  const value = shape && typeof shape.getAttr === 'function'
+    ? shape.getAttr(FIXED_STROKE_WIDTH_RATIO_ATTR)
+    : undefined;
+
+  return normalizeFixedStrokeWidthRatio(value);
+}
 
 export function createSvgLikeShape({
   id,
@@ -28,6 +49,7 @@ export function createSvgLikeShape({
   scaleY = 1,
   rotation = 0,
   draggable = true,
+  strokeWidthRatio = DEFAULT_FIXED_STROKE_WIDTH_RATIO,
 } = {}) {
   const safeWidth = Math.max(width || baseWidth || viewBox.width || 1, 1);
   const safeHeight = Math.max(height || baseHeight || viewBox.height || 1, 1);
@@ -49,6 +71,7 @@ export function createSvgLikeShape({
     equipmentType: shapeType,
     svgBaseWidth: baseWidth,
     svgBaseHeight: baseHeight,
+    [FIXED_STROKE_WIDTH_RATIO_ATTR]: normalizeFixedStrokeWidthRatio(strokeWidthRatio),
 
     // hitFunc uses fillStrokeShape, so provide a fill only for hit canvas.
     // It is not used by sceneFunc.
@@ -81,6 +104,7 @@ export function serializeSvgLikeShape(shape) {
     scaleY: shape.scaleY(),
     rotation: shape.rotation(),
     draggable: shape.draggable(),
+    strokeWidthRatio: getFixedStrokeWidthRatio(shape),
   };
 }
 
@@ -570,18 +594,15 @@ function drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale) {
 }
 
 function getShapeScale(shape, viewBox, canvasPixelScale) {
-  const scaleX = Math.max(shape.width(), 1) / Math.max(viewBox.width, 1);
-  const scaleY = Math.max(shape.height(), 1) / Math.max(viewBox.height, 1);
-  const maxScale = Math.max(scaleX, scaleY, 0.0001);
-  const balancedScale = Math.max(Math.sqrt(scaleX * scaleY), 0.0001);
+  const strokeWidthRatio = getFixedStrokeWidthRatio(shape);
 
   return {
-    scaleX,
-    scaleY,
-    maxScale,
-    strokeScaleX: scaleX * canvasPixelScale.scaleX,
-    strokeScaleY: scaleY * canvasPixelScale.scaleY,
-    strokeMaxScale: balancedScale * canvasPixelScale.maxScale,
+    scaleX: strokeWidthRatio,
+    scaleY: strokeWidthRatio,
+    maxScale: strokeWidthRatio,
+    strokeScaleX: strokeWidthRatio * canvasPixelScale.scaleX,
+    strokeScaleY: strokeWidthRatio * canvasPixelScale.scaleY,
+    strokeMaxScale: strokeWidthRatio * canvasPixelScale.maxScale,
   };
 }
 

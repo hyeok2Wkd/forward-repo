@@ -5,6 +5,10 @@ import {
   getShapeTypeFromNode,
   restoreShapeNode,
 } from './shapeFactoryRegistry';
+import {
+  FIXED_STROKE_WIDTH_RATIO_ATTR,
+  getFixedStrokeWidthRatio,
+} from '../konvaSvgFactories/svgShapeFactoryUtils';
 
 export const EQUIPMENT_GROUP_KIND = 'equipmentGroup';
 export const LABEL_ROLE = 'equipmentLabel';
@@ -116,6 +120,7 @@ export function serializeNode(node) {
       scaleY: target.scaleY(),
       rotation: target.rotation(),
       draggable: target.draggable(),
+      strokeWidthRatio: getNodeStrokeWidthRatio(shape),
       hasLabel: Boolean(labelText),
       labelText,
     };
@@ -135,6 +140,7 @@ export function serializeNode(node) {
       scaleY: target.scaleY(),
       rotation: target.rotation(),
       draggable: target.draggable(),
+      strokeWidthRatio: getNodeStrokeWidthRatio(target),
       hasLabel: false,
       labelText: '',
     };
@@ -273,6 +279,13 @@ function readNodeMethod(node, methodName) {
   return node && typeof node[methodName] === 'function'
     ? node[methodName]()
     : undefined;
+}
+
+function getNodeStrokeWidthRatio(node) {
+  if (!node || typeof node.getAttr !== 'function') return undefined;
+  return node.getAttr(FIXED_STROKE_WIDTH_RATIO_ATTR) == null
+    ? undefined
+    : getFixedStrokeWidthRatio(node);
 }
 
 function toNodeArray(collection) {

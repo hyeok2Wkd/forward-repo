@@ -31,6 +31,29 @@
         >
           SVG compare
         </button>
+        <label class="stroke-ratio-control">
+          <span class="stroke-ratio-control__label">Stroke</span>
+          <input
+            v-model.number="strokeWidthRatio"
+            class="stroke-ratio-control__range"
+            type="range"
+            :min="strokeWidthRatioMin"
+            :max="strokeWidthRatioMax"
+            :step="strokeWidthRatioStep"
+            aria-label="Stroke width ratio"
+          />
+          <input
+            v-model.number="strokeWidthRatio"
+            class="stroke-ratio-control__input"
+            type="number"
+            :min="strokeWidthRatioMin"
+            :max="strokeWidthRatioMax"
+            :step="strokeWidthRatioStep"
+            aria-label="Stroke width ratio value"
+            @blur="normalizeStrokeWidthRatioInput"
+            @change="normalizeStrokeWidthRatioInput"
+          />
+        </label>
         <button
           type="button"
           class="toolbar-button"
@@ -144,6 +167,11 @@ import ToolPalette from './ToolPalette.vue';
 import { PALETTE_ITEMS, getShapeTypeFromNode } from '../konva/shapeFactoryRegistry';
 import { getSvgSourceForShapeType } from '../konva/svgSourceRegistry';
 import {
+  DEFAULT_FIXED_STROKE_WIDTH_RATIO,
+  getFixedStrokeWidthRatio,
+  normalizeFixedStrokeWidthRatio,
+} from '../konvaSvgFactories/svgShapeFactoryUtils';
+import {
   createNodeFromType,
   findEquipmentShape,
   getNodeLabelText,
@@ -157,6 +185,9 @@ import {
 } from '../konva/layoutDrawingHelpers';
 
 const MIN_SHAPE_SIZE = 8;
+const MIN_STROKE_WIDTH_RATIO = 0.25;
+const MAX_STROKE_WIDTH_RATIO = 4;
+const STROKE_WIDTH_RATIO_STEP = 0.05;
 
 export default {
   name: 'LayoutDrawingTool',
@@ -168,6 +199,10 @@ export default {
     return {
       paletteItems: PALETTE_ITEMS,
       selectedTool: null,
+      strokeWidthRatio: DEFAULT_FIXED_STROKE_WIDTH_RATIO,
+      strokeWidthRatioMin: MIN_STROKE_WIDTH_RATIO,
+      strokeWidthRatioMax: MAX_STROKE_WIDTH_RATIO,
+      strokeWidthRatioStep: STROKE_WIDTH_RATIO_STEP,
       stage: null,
       layer: null,
       transformer: null,
@@ -228,6 +263,10 @@ export default {
         width: `${this.svgCompareDialog.displayWidth}px`,
         height: `${this.svgCompareDialog.displayHeight}px`,
       };
+    },
+
+    normalizedStrokeWidthRatio() {
+      return this.clampStrokeWidthRatio(this.strokeWidthRatio);
     },
   },
   mounted() {
@@ -398,6 +437,7 @@ export default {
         width: 1,
         height: 1,
         draggable: true,
+        strokeWidthRatio: this.normalizedStrokeWidthRatio,
       }));
 
       node.opacity(0.72);
@@ -678,7 +718,8 @@ export default {
         const factoryImageDataUrl = this.createFactoryPreviewDataUrl(
           compareTarget.type,
           dimensions.renderWidth,
-          dimensions.renderHeight
+          dimensions.renderHeight,
+          getFixedStrokeWidthRatio(compareTarget.shape)
         );
 
         this.closeLabelEditor();
@@ -760,7 +801,7 @@ export default {
       };
     },
 
-    createFactoryPreviewDataUrl(type, width, height) {
+    createFactoryPreviewDataUrl(type, width, height, strokeWidthRatio = this.normalizedStrokeWidthRatio) {
       const container = document.createElement('div');
       container.style.position = 'fixed';
       container.style.left = '-10000px';
@@ -783,6 +824,7 @@ export default {
         width,
         height,
         draggable: false,
+        strokeWidthRatio,
       });
 
       try {
@@ -872,6 +914,15 @@ export default {
         : undefined;
     },
 
+    clampStrokeWidthRatio(value) {
+      const ratio = normalizeFixedStrokeWidthRatio(value);
+      return Math.min(Math.max(ratio, MIN_STROKE_WIDTH_RATIO), MAX_STROKE_WIDTH_RATIO);
+    },
+
+    normalizeStrokeWidthRatioInput() {
+      this.strokeWidthRatio = this.normalizedStrokeWidthRatio;
+    },
+
     createNodeId(type) {
       this.nodeSequence += 1;
       return `${type}-${Date.now()}-${this.nodeSequence}`;
@@ -933,6 +984,7 @@ export default {
 .layout-drawing-tool__toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   min-height: 48px;
   padding: 8px 12px;
@@ -964,6 +1016,46 @@ export default {
 .toolbar-button:disabled {
   color: #9ca3af;
   cursor: not-allowed;
+}
+
+.stroke-ratio-control {
+  display: inline-grid;
+  grid-template-columns: auto 112px 64px;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid #c8d0dc;
+  border-radius: 6px;
+  background: #fbfcfe;
+  color: #1f2937;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.stroke-ratio-control__label {
+  font-weight: 700;
+}
+
+.stroke-ratio-control__range {
+  width: 112px;
+  margin: 0;
+}
+
+.stroke-ratio-control__input {
+  width: 64px;
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid #c8d0dc;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+}
+
+.stroke-ratio-control__input:focus {
+  border-color: #2563eb;
+  outline: none;
 }
 
 .toolbar-error {
