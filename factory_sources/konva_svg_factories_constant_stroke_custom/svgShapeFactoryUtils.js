@@ -5,7 +5,8 @@
 // 2. No Konva node `name` is assigned.
 // 3. No drag/transform coordinate correction helpers are included.
 //    Keep Konva's x/y/width/height/scaleX/scaleY/rotation exactly as they are.
-// 4. Stroke width is drawn in screen-stable pixels by using the current canvas transform.
+// 4. Stroke width is fixed at the pixel width produced by rendering the SVG
+//    at this Shape's width/height, then kept stable against later transforms.
 // 5. Rect strokes are edge-aligned so their outside edge stays on the SVG boundary.
 
 import Konva from 'konva';
@@ -90,6 +91,8 @@ function drawSvgLikeScene(context, shape, commands, viewBox) {
   const height = Math.max(shape.height(), 1);
   const scaleX = width / Math.max(viewBox.width, 1);
   const scaleY = height / Math.max(viewBox.height, 1);
+  const canvasPixelScale = getCanvasPixelScale(ctx, shape);
+  const shapeScale = getShapeScale(shape, viewBox, canvasPixelScale);
 
   ctx.save();
 
@@ -103,19 +106,19 @@ function drawSvgLikeScene(context, shape, commands, viewBox) {
   ctx.clip();
 
   for (const command of commands) {
-    drawCommand(ctx, command, viewBox);
+    drawCommand(ctx, command, viewBox, shapeScale);
   }
 
   ctx.restore();
 }
 
-function drawCommand(ctx, command, viewBox) {
+function drawCommand(ctx, command, viewBox, shapeScale) {
   ctx.save();
   ctx.globalAlpha = command.opacity == null ? 1 : command.opacity;
   ctx.setLineDash([]);
 
   if (command.type === 'fixedLine') {
-    drawFixedLine(ctx, command, viewBox);
+    drawFixedLine(ctx, command, viewBox, shapeScale);
     ctx.restore();
     return;
   }
@@ -127,20 +130,20 @@ function drawCommand(ctx, command, viewBox) {
   }
 
   if (command.type === 'fixedEllipseStroke') {
-    drawFixedEllipseStroke(ctx, command);
+    drawFixedEllipseStroke(ctx, command, shapeScale);
     ctx.restore();
     return;
   }
 
   if (command.type === 'fixedPolygonStroke') {
-    drawFixedPolygonStroke(ctx, command);
+    drawFixedPolygonStroke(ctx, command, shapeScale);
     ctx.restore();
     return;
   }
 
   if (command.type === 'path') {
     const path = getPath(command.data);
-    if (path) paintPath(ctx, path, command);
+    if (path) paintPath(ctx, path, command, shapeScale);
     ctx.restore();
     return;
   }
@@ -155,7 +158,7 @@ function drawCommand(ctx, command, viewBox) {
     }
 
     if (command.stroke) {
-      drawEdgeAlignedRectStroke(ctx, command);
+      drawEdgeAlignedRectStroke(ctx, command, shapeScale);
     }
 
     ctx.restore();
@@ -163,11 +166,11 @@ function drawCommand(ctx, command, viewBox) {
   }
 
   createPrimitivePath(ctx, command);
-  paintCurrentPath(ctx, command);
+  paintCurrentPath(ctx, command, shapeScale);
   ctx.restore();
 }
 
-function drawFixedLine(ctx, command, viewBox) {
+function drawFixedLine(ctx, command, viewBox, shapeScale) {
   const { scaleX, scaleY, maxScale } = getCurrentCanvasScale(ctx);
   const edge = command.edge;
   const isHorizontal = edge === 'top'
@@ -187,7 +190,13 @@ function drawFixedLine(ctx, command, viewBox) {
     : isVertical
       ? scaleY
       : maxScale;
-  const localLineWidth = strokeWidth / Math.max(lineScale, 1);
+  const designLineScale = shapeScale.strokeMaxScale;
+  const designDashScale = isHorizontal
+    ? shapeScale.strokeScaleX
+    : isVertical
+      ? shapeScale.strokeScaleY
+      : shapeScale.strokeMaxScale;
+  const localLineWidth = (strokeWidth * designLineScale) / Math.max(lineScale, 0.0001);
   let x1 = command.x1 == null ? viewBox.x : command.x1;
   let y1 = command.y1 == null ? viewBox.y : command.y1;
   let x2 = command.x2 == null ? viewBox.x + viewBox.width : command.x2;
@@ -217,7 +226,9 @@ function drawFixedLine(ctx, command, viewBox) {
   ctx.miterLimit = command.miterLimit || 10;
 
   if (Array.isArray(command.dash)) {
-    ctx.setLineDash(command.dash.map((value) => value / Math.max(dashScale, 1)));
+    ctx.setLineDash(command.dash.map((value) => (
+      (value * designDashScale) / Math.max(dashScale, 0.0001)
+    )));
   }
 
   ctx.stroke();
@@ -281,10 +292,10 @@ function drawFixedRectGrid(ctx, command, viewBox) {
   }
 }
 
-function drawFixedEllipseStroke(ctx, command) {
+function drawFixedEllipseStroke(ctx, command, shapeScale) {
   const { maxScale } = getCurrentCanvasScale(ctx);
   const strokeWidth = command.strokeWidth || 1;
-  const localLineWidth = strokeWidth / Math.max(maxScale, 1);
+  const localLineWidth = (strokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
   const inset = command.edgeAligned === false ? 0 : localLineWidth / 2;
   const rx = Math.max((command.rx == null ? command.r : command.rx) - inset, 0);
   const ry = Math.max((command.ry == null ? command.r : command.ry) - inset, 0);
@@ -301,19 +312,21 @@ function drawFixedEllipseStroke(ctx, command) {
   ctx.miterLimit = command.miterLimit || 10;
 
   if (Array.isArray(command.dash)) {
-    ctx.setLineDash(command.dash.map((value) => value / Math.max(maxScale, 1)));
+    ctx.setLineDash(command.dash.map((value) => (
+      (value * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001)
+    )));
   }
 
   ctx.stroke();
 }
 
-function drawFixedPolygonStroke(ctx, command) {
+function drawFixedPolygonStroke(ctx, command, shapeScale) {
   const points = command.points || [];
   if (points.length < 2) return;
 
   const { maxScale } = getCurrentCanvasScale(ctx);
   const strokeWidth = command.strokeWidth || 1;
-  const localLineWidth = strokeWidth / Math.max(maxScale, 1);
+  const localLineWidth = (strokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
   const inset = command.edgeAligned === false ? 0 : localLineWidth / 2;
   const strokePoints = inset && points.length > 2
     ? offsetClosedPolygon(points, inset)
@@ -335,7 +348,9 @@ function drawFixedPolygonStroke(ctx, command) {
   ctx.miterLimit = command.miterLimit || 10;
 
   if (Array.isArray(command.dash)) {
-    ctx.setLineDash(command.dash.map((value) => value / Math.max(maxScale, 1)));
+    ctx.setLineDash(command.dash.map((value) => (
+      (value * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001)
+    )));
   }
 
   ctx.stroke();
@@ -409,34 +424,34 @@ function getPath(data) {
   return pathCache.get(data);
 }
 
-function paintPath(ctx, path, command) {
+function paintPath(ctx, path, command, shapeScale) {
   if (command.fill) {
     ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
     ctx.fill(path, command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
   }
 
   if (command.stroke) {
-    applyFixedStroke(ctx, command);
+    applyFixedStroke(ctx, command, shapeScale);
     ctx.stroke(path);
   }
 }
 
-function paintCurrentPath(ctx, command) {
+function paintCurrentPath(ctx, command, shapeScale) {
   if (command.fill) {
     ctx.fillStyle = applyOpacity(command.fill, command.fillOpacity);
     ctx.fill(command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
   }
 
   if (command.stroke) {
-    applyFixedStroke(ctx, command);
+    applyFixedStroke(ctx, command, shapeScale);
     ctx.stroke();
   }
 }
 
-function applyFixedStroke(ctx, command) {
+function applyFixedStroke(ctx, command, shapeScale) {
   const { maxScale } = getCurrentCanvasScale(ctx);
   const strokeWidth = command.strokeWidth || 1;
-  const localLineWidth = strokeWidth / maxScale;
+  const localLineWidth = (strokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
 
   ctx.strokeStyle = applyOpacity(command.stroke, command.strokeOpacity);
   ctx.lineWidth = localLineWidth;
@@ -445,25 +460,84 @@ function applyFixedStroke(ctx, command) {
   ctx.miterLimit = command.miterLimit || 10;
 
   if (Array.isArray(command.dash)) {
-    ctx.setLineDash(command.dash.map((value) => value / maxScale));
+    ctx.setLineDash(command.dash.map((value) => (
+      (value * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001)
+    )));
   }
 }
 
-function drawEdgeAlignedRectStroke(ctx, command) {
-  const { maxScale } = getCurrentCanvasScale(ctx);
+function drawEdgeAlignedRectStroke(ctx, command, shapeScale) {
+  if (Array.isArray(command.dash) && command.dash.length) {
+    drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale);
+    return;
+  }
+
+  const { scaleX, scaleY } = getCurrentCanvasScale(ctx);
   const originalStrokeWidth = command.strokeWidth || 1;
-  const localLineWidth = originalStrokeWidth / maxScale;
+  const targetStrokeWidth = originalStrokeWidth * shapeScale.strokeMaxScale;
 
   // SVG rect strokes are centered on the rect edge. If the original SVG used
   // x=stroke/2 and width=outerWidth-stroke, its outside edge is the real visual
-  // boundary. Reconstruct that outer boundary, then place a fixed-width stroke
-  // inside it so the outside edge stays aligned with the SVG boundary.
+  // boundary. Reconstruct that outer boundary, then fill the stroke band so
+  // non-uniform shape scaling cannot make vertical and horizontal edges differ.
   const originalInset = originalStrokeWidth / 2;
   const outerX = (command.x || 0) - originalInset;
   const outerY = (command.y || 0) - originalInset;
   const outerWidth = Math.max((command.width || 0) + originalStrokeWidth, 0);
   const outerHeight = Math.max((command.height || 0) + originalStrokeWidth, 0);
+  const outerRx = command.rx == null
+    ? 0
+    : Math.max(command.rx + originalInset, 0);
+  const ryBase = command.ry == null ? command.rx : command.ry;
+  const outerRy = ryBase == null
+    ? outerRx
+    : Math.max(ryBase + originalInset, 0);
 
+  const insetX = targetStrokeWidth / Math.max(scaleX, 0.0001);
+  const insetY = targetStrokeWidth / Math.max(scaleY, 0.0001);
+  const innerX = outerX + insetX;
+  const innerY = outerY + insetY;
+  const innerWidth = Math.max(outerWidth - insetX * 2, 0);
+  const innerHeight = Math.max(outerHeight - insetY * 2, 0);
+  const innerRx = Math.max(outerRx - insetX, 0);
+  const innerRy = Math.max(outerRy - insetY, 0);
+
+  ctx.beginPath();
+  roundedRect(
+    ctx,
+    outerX,
+    outerY,
+    outerWidth,
+    outerHeight,
+    outerRx,
+    outerRy
+  );
+
+  if (innerWidth > 0 && innerHeight > 0) {
+    roundedRect(
+      ctx,
+      innerX,
+      innerY,
+      innerWidth,
+      innerHeight,
+      innerRx,
+      innerRy
+    );
+  }
+
+  ctx.fillStyle = applyOpacity(command.stroke, command.strokeOpacity);
+  ctx.fill('evenodd');
+}
+
+function drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale) {
+  const { maxScale } = getCurrentCanvasScale(ctx);
+  const originalStrokeWidth = command.strokeWidth || 1;
+  const localLineWidth = (originalStrokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
+  const originalInset = originalStrokeWidth / 2;
+  const outerX = (command.x || 0) - originalInset;
+  const outerY = (command.y || 0) - originalInset;
+  const outerWidth = Math.max((command.width || 0) + originalStrokeWidth, 0);
+  const outerHeight = Math.max((command.height || 0) + originalStrokeWidth, 0);
   const dynamicInset = localLineWidth / 2;
   const rx = command.rx == null
     ? 0
@@ -489,12 +563,44 @@ function drawEdgeAlignedRectStroke(ctx, command) {
   ctx.lineCap = command.lineCap || 'butt';
   ctx.lineJoin = command.lineJoin || 'miter';
   ctx.miterLimit = command.miterLimit || 10;
-
-  if (Array.isArray(command.dash)) {
-    ctx.setLineDash(command.dash.map((value) => value / maxScale));
-  }
-
+  ctx.setLineDash(command.dash.map((value) => (
+    (value * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001)
+  )));
   ctx.stroke();
+}
+
+function getShapeScale(shape, viewBox, canvasPixelScale) {
+  const scaleX = Math.max(shape.width(), 1) / Math.max(viewBox.width, 1);
+  const scaleY = Math.max(shape.height(), 1) / Math.max(viewBox.height, 1);
+  const maxScale = Math.max(scaleX, scaleY, 0.0001);
+  const balancedScale = Math.max(Math.sqrt(scaleX * scaleY), 0.0001);
+
+  return {
+    scaleX,
+    scaleY,
+    maxScale,
+    strokeScaleX: scaleX * canvasPixelScale.scaleX,
+    strokeScaleY: scaleY * canvasPixelScale.scaleY,
+    strokeMaxScale: balancedScale * canvasPixelScale.maxScale,
+  };
+}
+
+function getCanvasPixelScale(ctx, shape) {
+  const currentScale = getCurrentCanvasScale(ctx);
+  const absoluteScale = shape && typeof shape.getAbsoluteScale === 'function'
+    ? shape.getAbsoluteScale()
+    : {
+      x: shape && typeof shape.scaleX === 'function' ? shape.scaleX() : 1,
+      y: shape && typeof shape.scaleY === 'function' ? shape.scaleY() : 1,
+    };
+  const scaleX = currentScale.scaleX / Math.max(Math.abs(absoluteScale.x || 1), 0.0001);
+  const scaleY = currentScale.scaleY / Math.max(Math.abs(absoluteScale.y || 1), 0.0001);
+
+  return {
+    scaleX,
+    scaleY,
+    maxScale: Math.max(scaleX, scaleY, 0.0001),
+  };
 }
 
 function getCurrentCanvasScale(ctx) {
@@ -509,7 +615,7 @@ function getCurrentCanvasScale(ctx) {
   return {
     scaleX,
     scaleY,
-    maxScale: Math.max(scaleX, scaleY, 1),
+    maxScale: Math.max(scaleX, scaleY, 0.0001),
   };
 }
 

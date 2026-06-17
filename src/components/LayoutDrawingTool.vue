@@ -25,6 +25,15 @@
         <button
           type="button"
           class="toolbar-button"
+          :disabled="!canOpenSvgCompare"
+          :title="svgCompareButtonTitle"
+          @click="openSvgCompare"
+        >
+          SVG compare
+        </button>
+        <button
+          type="button"
+          class="toolbar-button"
           :disabled="!selectedNode"
           @click="deleteSelectedNode"
         >
@@ -68,6 +77,63 @@
         spellcheck="false"
       ></textarea>
     </section>
+
+    <div
+      v-if="svgCompareDialog.visible"
+      class="svg-compare-modal"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="`SVG compare ${svgCompareDialog.label}`"
+      @click.self="closeSvgCompare"
+    >
+      <div class="svg-compare-modal__panel">
+        <header class="svg-compare-modal__header">
+          <div>
+            <h2 class="svg-compare-modal__title">
+              SVG Compare - {{ svgCompareDialog.label }}
+            </h2>
+            <div class="svg-compare-modal__meta">
+              {{ svgCompareDialog.fileName }} / {{ svgCompareDialog.actualWidth }} x
+              {{ svgCompareDialog.actualHeight }}
+            </div>
+          </div>
+          <button
+            type="button"
+            class="svg-compare-modal__close"
+            aria-label="Close SVG compare"
+            @click="closeSvgCompare"
+          >
+            X
+          </button>
+        </header>
+
+        <div class="svg-compare-modal__grid">
+          <section class="svg-compare-card">
+            <h3 class="svg-compare-card__title">Factory render</h3>
+            <div class="svg-compare-card__artboard">
+              <img
+                class="svg-compare-card__image"
+                :src="svgCompareDialog.factoryImageDataUrl"
+                :alt="`${svgCompareDialog.label} factory render`"
+                :style="svgComparePreviewStyle"
+              />
+            </div>
+          </section>
+
+          <section class="svg-compare-card">
+            <h3 class="svg-compare-card__title">Source SVG</h3>
+            <div class="svg-compare-card__artboard">
+              <img
+                class="svg-compare-card__image"
+                :src="svgCompareDialog.sourceUrl"
+                :alt="`${svgCompareDialog.label} source SVG`"
+                :style="svgComparePreviewStyle"
+              />
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -75,9 +141,11 @@
 import Konva from 'konva';
 import { markRaw } from 'vue';
 import ToolPalette from './ToolPalette.vue';
-import { PALETTE_ITEMS } from '../konva/shapeFactoryRegistry';
+import { PALETTE_ITEMS, getShapeTypeFromNode } from '../konva/shapeFactoryRegistry';
+import { getSvgSourceForShapeType } from '../konva/svgSourceRegistry';
 import {
   createNodeFromType,
+  findEquipmentShape,
   getNodeLabelText,
   getRelativePointerPosition,
   getTransformerTarget,
@@ -122,6 +190,17 @@ export default {
         left: 0,
         top: 0,
       },
+      svgCompareDialog: {
+        visible: false,
+        label: '',
+        fileName: '',
+        sourceUrl: '',
+        factoryImageDataUrl: '',
+        actualWidth: 0,
+        actualHeight: 0,
+        displayWidth: 0,
+        displayHeight: 0,
+      },
     };
   },
   computed: {
@@ -129,6 +208,25 @@ export default {
       return {
         left: `${this.labelEditor.left}px`,
         top: `${this.labelEditor.top}px`,
+      };
+    },
+
+    canOpenSvgCompare() {
+      const compareTarget = this.getSvgCompareTarget();
+      return Boolean(compareTarget && compareTarget.source);
+    },
+
+    svgCompareButtonTitle() {
+      const compareTarget = this.getSvgCompareTarget();
+      if (!compareTarget) return 'Select a drawn shape first';
+      if (!compareTarget.source) return 'No source SVG is registered for this shape';
+      return `Compare with ${compareTarget.source.fileName}`;
+    },
+
+    svgComparePreviewStyle() {
+      return {
+        width: `${this.svgCompareDialog.displayWidth}px`,
+        height: `${this.svgCompareDialog.displayHeight}px`,
       };
     },
   },
@@ -209,6 +307,7 @@ export default {
       this.selectedTool = type;
       this.clearSelection();
       this.closeLabelEditor();
+      this.closeSvgCompare();
     },
 
     setSelectMode() {
@@ -402,6 +501,7 @@ export default {
       if (!this.selectedNode || !this.layer) return;
 
       this.closeLabelEditor();
+      this.closeSvgCompare();
       this.selectedNode.destroy();
       this.clearSelection();
       this.layer.batchDraw();
@@ -412,6 +512,7 @@ export default {
       if (!this.layer) return;
 
       this.closeLabelEditor();
+      this.closeSvgCompare();
       this.clearSelection();
       this.destroyEquipmentNodes();
       this.transformer.moveToTop();
@@ -421,6 +522,12 @@ export default {
 
     handleKeyDown(event) {
       if (this.isEditableElement(event.target)) return;
+      if (event.key === 'Escape' && this.svgCompareDialog.visible) {
+        event.preventDefault();
+        this.closeSvgCompare();
+        return;
+      }
+
       if (event.key !== 'Delete' && event.key !== 'Backspace') return;
 
       if (this.selectedNode) {
@@ -532,6 +639,7 @@ export default {
       const restoredNodes = items.map((item) => markRaw(restoreNodeFromData(item)));
 
       this.closeLabelEditor();
+      this.closeSvgCompare();
       this.clearSelection();
       this.destroyEquipmentNodes();
 
@@ -551,6 +659,144 @@ export default {
       if (payload && Array.isArray(payload.nodes)) return payload.nodes;
       if (payload && Array.isArray(payload.layout)) return payload.layout;
       throw new Error('Layout JSON must be an array or contain items, nodes, or layout.');
+    },
+
+    openSvgCompare() {
+      const compareTarget = this.getSvgCompareTarget();
+      if (!compareTarget) {
+        this.errorMessage = 'Select a drawn shape first.';
+        return;
+      }
+
+      if (!compareTarget.source) {
+        this.errorMessage = 'No source SVG is registered for this shape.';
+        return;
+      }
+
+      try {
+        const dimensions = this.getSvgCompareDimensions(compareTarget.shape);
+        const factoryImageDataUrl = this.createFactoryPreviewDataUrl(
+          compareTarget.type,
+          dimensions.renderWidth,
+          dimensions.renderHeight
+        );
+
+        this.closeLabelEditor();
+        this.errorMessage = '';
+        this.svgCompareDialog = {
+          visible: true,
+          label: compareTarget.source.label,
+          fileName: compareTarget.source.fileName,
+          sourceUrl: compareTarget.source.url,
+          factoryImageDataUrl,
+          actualWidth: dimensions.actualWidth,
+          actualHeight: dimensions.actualHeight,
+          displayWidth: dimensions.displayWidth,
+          displayHeight: dimensions.displayHeight,
+        };
+      } catch (error) {
+        this.errorMessage = error && error.message
+          ? error.message
+          : 'Unable to render SVG comparison.';
+      }
+    },
+
+    closeSvgCompare() {
+      if (!this.svgCompareDialog.visible) return;
+
+      this.svgCompareDialog = {
+        visible: false,
+        label: '',
+        fileName: '',
+        sourceUrl: '',
+        factoryImageDataUrl: '',
+        actualWidth: 0,
+        actualHeight: 0,
+        displayWidth: 0,
+        displayHeight: 0,
+      };
+    },
+
+    getSvgCompareTarget() {
+      if (!this.selectedNode) return null;
+
+      const target = getTransformerTarget(this.selectedNode) || this.selectedNode;
+      const shape = findEquipmentShape(target) || target;
+      const type = getShapeTypeFromNode(shape) || getShapeTypeFromNode(target);
+
+      if (!type) return null;
+
+      return {
+        target,
+        shape,
+        type,
+        source: getSvgSourceForShapeType(type),
+      };
+    },
+
+    getSvgCompareDimensions(shape) {
+      const baseWidth = this.readNodeMethod(shape, 'width') || 1;
+      const baseHeight = this.readNodeMethod(shape, 'height') || 1;
+      const scale = shape && typeof shape.getAbsoluteScale === 'function'
+        ? shape.getAbsoluteScale()
+        : {
+          x: this.readNodeMethod(shape, 'scaleX') || 1,
+          y: this.readNodeMethod(shape, 'scaleY') || 1,
+        };
+      const actualWidth = Math.max(Math.round(baseWidth * Math.abs(scale.x || 1)), 1);
+      const actualHeight = Math.max(Math.round(baseHeight * Math.abs(scale.y || 1)), 1);
+      const renderScale = Math.min(1, 1200 / Math.max(actualWidth, actualHeight));
+      const renderWidth = Math.max(Math.round(actualWidth * renderScale), 1);
+      const renderHeight = Math.max(Math.round(actualHeight * renderScale), 1);
+      const displayScale = Math.min(1, 520 / renderWidth, 320 / renderHeight);
+
+      return {
+        actualWidth,
+        actualHeight,
+        renderWidth,
+        renderHeight,
+        displayWidth: Math.max(Math.round(renderWidth * displayScale), 1),
+        displayHeight: Math.max(Math.round(renderHeight * displayScale), 1),
+      };
+    },
+
+    createFactoryPreviewDataUrl(type, width, height) {
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-10000px';
+      container.style.top = '-10000px';
+      container.style.width = '1px';
+      container.style.height = '1px';
+      container.style.overflow = 'hidden';
+      document.body.appendChild(container);
+
+      const stage = new Konva.Stage({
+        container,
+        width,
+        height,
+      });
+      const layer = new Konva.Layer();
+      const previewNode = createNodeFromType(type, {
+        id: `svg-compare-${type}`,
+        x: 0,
+        y: 0,
+        width,
+        height,
+        draggable: false,
+      });
+
+      try {
+        previewNode.listening(false);
+        layer.add(previewNode);
+        stage.add(layer);
+        layer.draw();
+        return stage.toDataURL({ pixelRatio: 2 });
+      } finally {
+        stage.destroy();
+        if (container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+      }
     },
 
     destroyEquipmentNodes() {
@@ -618,6 +864,12 @@ export default {
       if (!collection) return [];
       if (typeof collection.toArray === 'function') return collection.toArray();
       return Array.from(collection);
+    },
+
+    readNodeMethod(node, methodName) {
+      return node && typeof node[methodName] === 'function'
+        ? node[methodName]()
+        : undefined;
     },
 
     createNodeId(type) {
@@ -795,5 +1047,136 @@ export default {
 
 .label-editor__button:hover {
   background: #f3f6fa;
+}
+
+.svg-compare-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.svg-compare-modal__panel {
+  display: flex;
+  width: min(1120px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #c8d0dc;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.28);
+}
+
+.svg-compare-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #d7dde7;
+  background: #fbfcfe;
+}
+
+.svg-compare-modal__title {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.svg-compare-modal__meta {
+  margin-top: 4px;
+  color: #4b5563;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.svg-compare-modal__close {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c8d0dc;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1f2937;
+  font: inherit;
+  cursor: pointer;
+}
+
+.svg-compare-modal__close:hover {
+  background: #f3f6fa;
+}
+
+.svg-compare-modal__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  min-height: 0;
+  padding: 16px;
+  overflow: auto;
+}
+
+.svg-compare-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #d7dde7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.svg-compare-card__title {
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid #d7dde7;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.svg-compare-card__artboard {
+  display: flex;
+  min-height: 360px;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow: auto;
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(45deg, #e5e7eb 25%, transparent 25%),
+    linear-gradient(-45deg, #e5e7eb 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e5e7eb 75%),
+    linear-gradient(-45deg, transparent 75%, #e5e7eb 75%);
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  background-size: 16px 16px;
+}
+
+.svg-compare-card__image {
+  display: block;
+  max-width: 100%;
+  object-fit: contain;
+}
+
+@media (max-width: 860px) {
+  .svg-compare-modal {
+    padding: 12px;
+  }
+
+  .svg-compare-modal__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .svg-compare-card__artboard {
+    min-height: 260px;
+  }
 }
 </style>
