@@ -189,6 +189,9 @@ const MIN_SHAPE_SIZE = 8;
 const MIN_STROKE_WIDTH_RATIO = 0.25;
 const MAX_STROKE_WIDTH_RATIO = 4;
 const STROKE_WIDTH_RATIO_STEP = 0.05;
+const STAGE_ZOOM_STEP = 1.08;
+const MIN_STAGE_SCALE = 0.2;
+const MAX_STAGE_SCALE = 5;
 
 export default {
   name: 'LayoutDrawingTool',
@@ -310,6 +313,7 @@ export default {
         pointerUp: (event) => this.handleStagePointerUp(event),
         click: (event) => this.handleStageClick(event),
         doubleClick: (event) => this.handleStageDoubleClick(event),
+        wheel: (event) => this.handleStageWheel(event),
       };
 
       this.stage.on('mousedown touchstart', this.stageEventHandlers.pointerDown);
@@ -317,6 +321,7 @@ export default {
       this.stage.on('mouseup touchend', this.stageEventHandlers.pointerUp);
       this.stage.on('click tap', this.stageEventHandlers.click);
       this.stage.on('dblclick dbltap', this.stageEventHandlers.doubleClick);
+      this.stage.on('wheel', this.stageEventHandlers.wheel);
 
     },
 
@@ -428,6 +433,38 @@ export default {
 
       this.selectNode(target);
       this.openLabelEditor(target);
+    },
+
+    handleStageWheel(event) {
+      if (!this.stage || !this.layer || !event.evt || !event.evt.ctrlKey) return;
+
+      event.evt.preventDefault();
+
+      const pointer = this.getStagePointerFromEvent(event);
+      if (!pointer) return;
+
+      const oldScale = this.stage.scaleX() || 1;
+      const direction = event.evt.deltaY > 0 ? -1 : 1;
+      const nextScale = direction > 0
+        ? oldScale * STAGE_ZOOM_STEP
+        : oldScale / STAGE_ZOOM_STEP;
+      const newScale = Math.min(Math.max(nextScale, MIN_STAGE_SCALE), MAX_STAGE_SCALE);
+
+      if (newScale === oldScale) return;
+
+      const stagePosition = this.stage.position();
+      const mousePointTo = {
+        x: (pointer.x - stagePosition.x) / oldScale,
+        y: (pointer.y - stagePosition.y) / oldScale,
+      };
+
+      this.stage.scale({ x: newScale, y: newScale });
+      this.stage.position({
+        x: pointer.x - mousePointTo.x * newScale,
+        y: pointer.y - mousePointTo.y * newScale,
+      });
+      this.closeLabelEditor();
+      this.layer.batchDraw();
     },
 
     createDraftNode(pointer) {
@@ -873,6 +910,20 @@ export default {
       const pointer = getRelativePointerPosition(this.layer);
       if (pointer || !event || !event.evt || !this.stage || !this.layer) return pointer;
 
+      const stagePointer = this.getStagePointerFromEvent(event);
+      if (!stagePointer) return null;
+
+      const transform = this.layer.getAbsoluteTransform().copy();
+      transform.invert();
+      return transform.point(stagePointer);
+    },
+
+    getStagePointerFromEvent(event) {
+      if (!event || !event.evt || !this.stage) return null;
+
+      const pointer = this.stage.getPointerPosition();
+      if (pointer) return pointer;
+
       const sourceEvent = event.evt.touches && event.evt.touches[0]
         ? event.evt.touches[0]
         : event.evt.changedTouches && event.evt.changedTouches[0]
@@ -884,13 +935,10 @@ export default {
       }
 
       const stageRect = this.stage.container().getBoundingClientRect();
-      const stagePointer = {
+      return {
         x: sourceEvent.clientX - stageRect.left,
         y: sourceEvent.clientY - stageRect.top,
       };
-      const transform = this.layer.getAbsoluteTransform().copy();
-      transform.invert();
-      return transform.point(stagePointer);
     },
 
     isEditableElement(element) {
@@ -947,6 +995,7 @@ export default {
         this.stage.off('mouseup touchend');
         this.stage.off('click tap');
         this.stage.off('dblclick dbltap');
+        this.stage.off('wheel');
         this.stage.destroy();
       }
 

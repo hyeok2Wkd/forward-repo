@@ -12,7 +12,7 @@ import Konva from 'konva';
 
 const pathCache = new Map();
 export const FIXED_STROKE_WIDTH_RATIO_ATTR = 'fixedStrokeWidthRatio';
-export const DEFAULT_FIXED_STROKE_WIDTH_RATIO = 4;
+export const DEFAULT_FIXED_STROKE_WIDTH_RATIO = 3;
 
 export function normalizeFixedStrokeWidthRatio(value, fallback = DEFAULT_FIXED_STROKE_WIDTH_RATIO) {
   const numericValue = Number(value);
