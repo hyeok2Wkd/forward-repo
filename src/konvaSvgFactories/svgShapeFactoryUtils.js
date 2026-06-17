@@ -240,6 +240,19 @@ function drawFixedLine(ctx, command, viewBox, shapeScale) {
     x2 = x1;
   }
 
+  if (isVertical && command.innerEdgeX != null && command.innerEdgeSide) {
+    const innerEdgeX = Number(command.innerEdgeX);
+    if (Number.isFinite(innerEdgeX)) {
+      const sideOffset = command.innerEdgeSide === 'left'
+        ? localLineWidth / 2
+        : command.innerEdgeSide === 'right'
+          ? -localLineWidth / 2
+          : 0;
+      x1 = innerEdgeX + sideOffset;
+      x2 = x1;
+    }
+  }
+
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
@@ -348,6 +361,11 @@ function drawFixedPolygonStroke(ctx, command, shapeScale) {
   const points = command.points || [];
   if (points.length < 2) return;
 
+  if (command.edgeAligned !== false && command.closed !== false && !Array.isArray(command.dash) && points.length > 2) {
+    drawEdgeAlignedPolygonStroke(ctx, command, points, shapeScale);
+    return;
+  }
+
   const { maxScale } = getCurrentCanvasScale(ctx);
   const strokeWidth = command.strokeWidth || 1;
   const localLineWidth = (strokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
@@ -378,6 +396,62 @@ function drawFixedPolygonStroke(ctx, command, shapeScale) {
   }
 
   ctx.stroke();
+}
+
+function drawEdgeAlignedPolygonStroke(ctx, command, points, shapeScale) {
+  const matrix = ctx && typeof ctx.getTransform === 'function'
+    ? ctx.getTransform()
+    : null;
+  const targetStrokeWidth = (command.strokeWidth || 1) * shapeScale.strokeMaxScale;
+
+  if (!matrix || targetStrokeWidth <= 0) {
+    drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale);
+    return;
+  }
+
+  const canvasPoints = points.map((point) => transformPoint(matrix, point));
+  const innerCanvasPoints = offsetClosedPolygon(canvasPoints, targetStrokeWidth);
+  const innerPoints = innerCanvasPoints.map((point) => inverseTransformPoint(matrix, point));
+
+  if (innerPoints.some((point) => !point)) {
+    drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale);
+    return;
+  }
+
+  ctx.beginPath();
+  drawPolygonPath(ctx, points);
+  drawPolygonPath(ctx, innerPoints);
+  ctx.fillStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.fill('evenodd');
+}
+
+function drawFixedPolygonStrokeFallback(ctx, command, points, shapeScale) {
+  const { maxScale } = getCurrentCanvasScale(ctx);
+  const strokeWidth = command.strokeWidth || 1;
+  const localLineWidth = (strokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
+  const inset = localLineWidth / 2;
+  const strokePoints = offsetClosedPolygon(points, inset);
+
+  if (strokePoints.length < 2) return;
+
+  ctx.beginPath();
+  drawPolygonPath(ctx, strokePoints);
+  ctx.strokeStyle = applyOpacity(command.stroke || 'black', command.strokeOpacity);
+  ctx.lineWidth = localLineWidth;
+  ctx.lineCap = command.lineCap || 'butt';
+  ctx.lineJoin = command.lineJoin || 'miter';
+  ctx.miterLimit = command.miterLimit || 10;
+  ctx.stroke();
+}
+
+function drawPolygonPath(ctx, points) {
+  if (!points.length) return;
+
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let index = 1; index < points.length; index += 1) {
+    ctx.lineTo(points[index].x, points[index].y);
+  }
+  ctx.closePath();
 }
 
 function offsetClosedPolygon(points, inset) {
@@ -440,6 +514,26 @@ function getLineIntersection(a1, a2, b1, b2) {
   };
 }
 
+function transformPoint(matrix, point) {
+  return {
+    x: matrix.a * point.x + matrix.c * point.y + matrix.e,
+    y: matrix.b * point.x + matrix.d * point.y + matrix.f,
+  };
+}
+
+function inverseTransformPoint(matrix, point) {
+  const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
+  if (Math.abs(determinant) < 0.000001) return null;
+
+  const x = point.x - matrix.e;
+  const y = point.y - matrix.f;
+
+  return {
+    x: (matrix.d * x - matrix.c * y) / determinant,
+    y: (-matrix.b * x + matrix.a * y) / determinant,
+  };
+}
+
 function getPath(data) {
   if (typeof Path2D === 'undefined') return null;
   if (!pathCache.has(data)) {
@@ -455,7 +549,7 @@ function paintPath(ctx, path, command, shapeScale) {
   }
 
   if (command.stroke) {
-    applyFixedStroke(ctx, command, shapeScale);
+    applyStroke(ctx, command, shapeScale);
     ctx.stroke(path);
   }
 }
@@ -467,8 +561,29 @@ function paintCurrentPath(ctx, command, shapeScale) {
   }
 
   if (command.stroke) {
-    applyFixedStroke(ctx, command, shapeScale);
+    applyStroke(ctx, command, shapeScale);
     ctx.stroke();
+  }
+}
+
+function applyStroke(ctx, command, shapeScale) {
+  if (command.fixedStroke === false) {
+    applyScaledStroke(ctx, command);
+    return;
+  }
+
+  applyFixedStroke(ctx, command, shapeScale);
+}
+
+function applyScaledStroke(ctx, command) {
+  ctx.strokeStyle = applyOpacity(command.stroke, command.strokeOpacity);
+  ctx.lineWidth = command.strokeWidth || 1;
+  ctx.lineCap = command.lineCap || 'butt';
+  ctx.lineJoin = command.lineJoin || 'miter';
+  ctx.miterLimit = command.miterLimit || 10;
+
+  if (Array.isArray(command.dash)) {
+    ctx.setLineDash(command.dash);
   }
 }
 

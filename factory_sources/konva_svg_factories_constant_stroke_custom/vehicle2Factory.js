@@ -30,12 +30,12 @@ const DRAW_COMMANDS = [
     "opacity": 1,
     "stroke": "black",
     "strokeOpacity": 0.5,
-    "strokeWidth": 1,
-    "x": 0.5,
-    "y": 0.5,
-    "width": 3.0,
-    "height": 29.0,
-    "rx": 1.5
+    "strokeWidth": 1.5,
+    "x": 0.75,
+    "y": 0.75,
+    "width": 2.5,
+    "height": 28.5,
+    "rx": 1.25
   },
   {
     "type": "rect",
@@ -52,12 +52,12 @@ const DRAW_COMMANDS = [
     "opacity": 1,
     "stroke": "black",
     "strokeOpacity": 0.5,
-    "strokeWidth": 1,
-    "x": 3.5,
-    "y": 0.5,
-    "width": 23.0,
-    "height": 29.0,
-    "rx": 4.5
+    "strokeWidth": 1.5,
+    "x": 3.75,
+    "y": 0.75,
+    "width": 22.5,
+    "height": 28.5,
+    "rx": 4.25
   },
   {
     "type": "path",
@@ -80,12 +80,12 @@ const DRAW_COMMANDS = [
     "opacity": 1,
     "stroke": "black",
     "strokeOpacity": 0.5,
-    "strokeWidth": 1,
-    "x": 26.5,
-    "y": 0.5,
-    "width": 3.0,
-    "height": 29.0,
-    "rx": 1.5
+    "strokeWidth": 1.5,
+    "x": 26.75,
+    "y": 0.75,
+    "width": 2.5,
+    "height": 28.5,
+    "rx": 1.25
   }
 ];
 

@@ -29,19 +29,20 @@ const DRAW_COMMANDS = [
     "opacity": 1,
     "stroke": "black",
     "strokeOpacity": 0.5,
-    "strokeWidth": 1,
-    "x": 0.5,
-    "y": 0.5,
-    "width": 29.0,
-    "height": 29.0
+    "strokeWidth": 1.5,
+    "x": 0.75,
+    "y": 0.75,
+    "width": 28.5,
+    "height": 28.5
   },
   {
     "type": "path",
     "opacity": 0.3,
     "stroke": "black",
     "strokeOpacity": 0.5,
-    "strokeWidth": 0.5,
-    "data": "M1 29L29 1M29 29L1 1"
+    "strokeWidth": 0.75,
+    "lineCap": "square",
+    "data": "M0 30L30 0M30 30L0 0"
   }
 ];
 

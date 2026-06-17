@@ -30,12 +30,12 @@ const DRAW_COMMANDS = [
     "opacity": 1,
     "stroke": "black",
     "strokeOpacity": 0.5,
-    "strokeWidth": 1,
-    "x": 0.5,
-    "y": 0.5,
-    "width": 29.0,
-    "height": 29.0,
-    "rx": 4.5
+    "strokeWidth": 1.5,
+    "x": 0.75,
+    "y": 0.75,
+    "width": 28.5,
+    "height": 28.5,
+    "rx": 4.25
   },
   {
     "type": "path",
@@ -45,19 +45,21 @@ const DRAW_COMMANDS = [
   },
   {
     "type": "path",
-    "opacity": 0.4,
+    "opacity": 0.3,
     "stroke": "black",
     "strokeOpacity": 0.5,
     "strokeWidth": 4.0,
     "lineCap": "round",
+    "fixedStroke": false,
     "data": "M15 9V21"
   },
   {
     "type": "path",
-    "opacity": 0.4,
+    "opacity": 0.3,
     "stroke": "black",
     "strokeOpacity": 0.5,
-    "strokeWidth": 1,
+    "strokeWidth": 1.0,
+    "fixedStroke": false,
     "data": "M12.5 10V13M17.5 10V13M17.5 17V20M12.5 17V20"
   }
 ];

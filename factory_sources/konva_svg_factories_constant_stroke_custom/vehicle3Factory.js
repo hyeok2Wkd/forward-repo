@@ -16,13 +16,32 @@ const VIEW_BOX = { x: 0.0, y: 0.0, width: 30.0, height: 30.0 };
 
 const DRAW_COMMANDS = [
   {
-    "type": "path",
+    "type": "fixedLine",
     "opacity": 1,
     "stroke": "black",
     "strokeOpacity": 0.5,
-    "strokeWidth": 3.0,
+    "strokeWidth": 2.0,
     "lineCap": "round",
-    "data": "M28.5 12V17.5M1.5 12V17.5"
+    "x1": 1.5,
+    "y1": 12,
+    "x2": 1.5,
+    "y2": 17.5,
+    "innerEdgeX": 2,
+    "innerEdgeSide": "right"
+  },
+  {
+    "type": "fixedLine",
+    "opacity": 1,
+    "stroke": "black",
+    "strokeOpacity": 0.5,
+    "strokeWidth": 2.0,
+    "lineCap": "round",
+    "x1": 28.5,
+    "y1": 12,
+    "x2": 28.5,
+    "y2": 17.5,
+    "innerEdgeX": 28,
+    "innerEdgeSide": "left"
   },
   {
     "type": "path",
@@ -31,12 +50,16 @@ const DRAW_COMMANDS = [
     "data": "M2 5C2 2.23858 4.23858 0 7 0H23C25.7614 0 28 2.23858 28 5V25C28 27.7614 25.7614 30 23 30H7C4.23858 30 2 27.7614 2 25V5Z"
   },
   {
-    "type": "path",
+    "type": "rect",
     "opacity": 1,
     "stroke": "black",
     "strokeOpacity": 0.5,
-    "strokeWidth": 1,
-    "data": "M7 0.5H23C25.4853 0.5 27.5 2.51472 27.5 5V25C27.5 27.4853 25.4853 29.5 23 29.5H7C4.51472 29.5 2.5 27.4853 2.5 25V5C2.5 2.51472 4.51472 0.5 7 0.5Z"
+    "strokeWidth": 1.5,
+    "x": 2.75,
+    "y": 0.75,
+    "width": 24.5,
+    "height": 28.5,
+    "rx": 4.25
   },
   {
     "type": "path",
