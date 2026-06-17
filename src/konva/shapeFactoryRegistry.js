@@ -65,6 +65,8 @@ import {
   normalizeFixedStrokeWidthRatio,
 } from '../konvaSvgFactories/svgShapeFactoryUtils';
 
+const COMPACT_EQUIPMENT_STROKE_WIDTH_RATIO = 2;
+
 export const SHAPE_FACTORY_REGISTRY = Object.freeze({
   stocker: {
     type: 'stocker',
@@ -86,6 +88,7 @@ export const SHAPE_FACTORY_REGISTRY = Object.freeze({
     type: 'port',
     shapeType: 'port',
     label: 'Port',
+    strokeWidthRatio: COMPACT_EQUIPMENT_STROKE_WIDTH_RATIO,
     create: createPortShape,
     restore: restorePortShape,
     serialize: serializePortShape,
@@ -182,6 +185,7 @@ export const SHAPE_FACTORY_REGISTRY = Object.freeze({
     type: 'vehicle1',
     shapeType: 'vehicle1',
     label: 'Vehicle 1',
+    strokeWidthRatio: COMPACT_EQUIPMENT_STROKE_WIDTH_RATIO,
     create: createVehicle1Shape,
     restore: restoreVehicle1Shape,
     serialize: serializeVehicle1Shape,
@@ -190,6 +194,7 @@ export const SHAPE_FACTORY_REGISTRY = Object.freeze({
     type: 'vehicle2',
     shapeType: 'vehicle2',
     label: 'Vehicle 2',
+    strokeWidthRatio: COMPACT_EQUIPMENT_STROKE_WIDTH_RATIO,
     create: createVehicle2Shape,
     restore: restoreVehicle2Shape,
     serialize: serializeVehicle2Shape,
@@ -198,6 +203,7 @@ export const SHAPE_FACTORY_REGISTRY = Object.freeze({
     type: 'vehicle3',
     shapeType: 'vehicle3',
     label: 'Vehicle 3',
+    strokeWidthRatio: COMPACT_EQUIPMENT_STROKE_WIDTH_RATIO,
     create: createVehicle3Shape,
     restore: restoreVehicle3Shape,
     serialize: serializeVehicle3Shape,
@@ -270,6 +276,7 @@ export function createShapeNode(type, attrs = {}) {
 
   const node = factory.create({
     ...attrs,
+    strokeWidthRatio: factory.strokeWidthRatio ?? attrs.strokeWidthRatio,
     draggable: attrs.draggable !== false,
   });
 
@@ -285,6 +292,7 @@ export function restoreShapeNode(data = {}) {
 
   const restoreData = {
     ...data,
+    strokeWidthRatio: factory.strokeWidthRatio ?? data.strokeWidthRatio,
     draggable: data.draggable !== false,
   };
 
@@ -300,7 +308,8 @@ function tagShapeNode(node, factory, sourceAttrs = {}) {
   if (!node || typeof node.setAttrs !== 'function') return;
 
   const strokeWidthRatio = normalizeFixedStrokeWidthRatio(
-    sourceAttrs.strokeWidthRatio
+    factory.strokeWidthRatio
+      ?? sourceAttrs.strokeWidthRatio
       ?? sourceAttrs[FIXED_STROKE_WIDTH_RATIO_ATTR]
       ?? node.getAttr(FIXED_STROKE_WIDTH_RATIO_ATTR)
   );

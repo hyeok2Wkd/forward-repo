@@ -11,6 +11,7 @@ import {
 export const VEHICLE2_BASE_WIDTH = 30.0;
 export const VEHICLE2_BASE_HEIGHT = 30.0;
 export const VEHICLE2_SHAPE_TYPE = 'vehicle2';
+export const VEHICLE2_STROKE_WIDTH_RATIO = 2;
 
 const VIEW_BOX = { x: 0.0, y: 0.0, width: 30.0, height: 30.0 };
 
@@ -99,6 +100,7 @@ export function createVehicle2Shape({
   scaleY = 1,
   rotation = 0,
   draggable = true,
+  strokeWidthRatio = VEHICLE2_STROKE_WIDTH_RATIO,
 } = {}) {
   return createSvgLikeShape({
     id,
@@ -115,6 +117,7 @@ export function createVehicle2Shape({
     scaleY,
     rotation,
     draggable,
+    strokeWidthRatio,
   });
 }
 
@@ -133,5 +136,6 @@ export function restoreVehicle2Shape(item) {
     scaleY: item.scaleY,
     rotation: item.rotation,
     draggable: item.draggable,
+    strokeWidthRatio: item.strokeWidthRatio,
   });
 }

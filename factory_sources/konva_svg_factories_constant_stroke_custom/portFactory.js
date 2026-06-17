@@ -11,6 +11,7 @@ import {
 export const PORT_BASE_WIDTH = 30.0;
 export const PORT_BASE_HEIGHT = 30.0;
 export const PORT_SHAPE_TYPE = 'port';
+export const PORT_STROKE_WIDTH_RATIO = 2;
 
 const VIEW_BOX = { x: 0.0, y: 0.0, width: 30.0, height: 30.0 };
 
@@ -56,6 +57,7 @@ export function createPortShape({
   scaleY = 1,
   rotation = 0,
   draggable = true,
+  strokeWidthRatio = PORT_STROKE_WIDTH_RATIO,
 } = {}) {
   return createSvgLikeShape({
     id,
@@ -72,6 +74,7 @@ export function createPortShape({
     scaleY,
     rotation,
     draggable,
+    strokeWidthRatio,
   });
 }
 
@@ -90,5 +93,6 @@ export function restorePortShape(item) {
     scaleY: item.scaleY,
     rotation: item.rotation,
     draggable: item.draggable,
+    strokeWidthRatio: item.strokeWidthRatio,
   });
 }
