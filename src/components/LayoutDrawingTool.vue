@@ -34,6 +34,15 @@
         >
           SVG compare
         </button>
+        <button
+          type="button"
+          class="toolbar-button"
+          :disabled="!canShowSvgSource"
+          :title="svgShowButtonTitle"
+          @click="showSelectedSvgSource"
+        >
+          SVG show
+        </button>
         <label class="stroke-ratio-control">
           <span class="stroke-ratio-control__label">Stroke</span>
           <input
@@ -205,6 +214,7 @@ import {
 } from '../konvaSvgFactories/svgShapeFactoryUtils';
 import {
   createNodeFromType,
+  createSvgImageNode,
   findEquipmentShape,
   getNodeLabelText,
   getRelativePointerPosition,
@@ -231,6 +241,44 @@ const STATE_TABLE_GAP_X = 20;
 const STATE_TABLE_GAP_Y = 24;
 const STATE_TABLE_START_X = 32;
 const STATE_TABLE_START_Y = 32;
+const SVG_REFERENCE_NODE_KIND = 'svgReference';
+const SVG_SHOW_GAP = 16;
+const SVG_TOOL_PREFIX = 'svg:';
+const svgSourceDimensionsCache = new Map();
+const svgSourceImageCache = new Map();
+const svgSourceImageLoadCache = new Map();
+
+function createSvgToolType(type) {
+  return `${SVG_TOOL_PREFIX}${type}`;
+}
+
+function getSvgToolShapeType(toolType) {
+  return typeof toolType === 'string' && toolType.startsWith(SVG_TOOL_PREFIX)
+    ? toolType.slice(SVG_TOOL_PREFIX.length)
+    : null;
+}
+
+function createDrawingPaletteItems() {
+  const factoryItems = PALETTE_ITEMS.map((item) => ({
+    ...item,
+    mode: 'factory',
+  }));
+  const svgItems = PALETTE_ITEMS
+    .map((item) => {
+      const source = getSvgSourceForShapeType(item.type);
+      if (!source) return null;
+
+      return {
+        type: createSvgToolType(item.type),
+        label: `${item.label} SVG`,
+        mode: 'svg',
+        title: `Draw ${source.fileName}`,
+      };
+    })
+    .filter(Boolean);
+
+  return [...factoryItems, ...svgItems];
+}
 
 export default {
   name: 'LayoutDrawingTool',
@@ -240,7 +288,7 @@ export default {
   emits: ['change', 'node-change'],
   data() {
     return {
-      paletteItems: PALETTE_ITEMS,
+      paletteItems: createDrawingPaletteItems(),
       selectedTool: null,
       strokeWidthRatio: DEFAULT_FIXED_STROKE_WIDTH_RATIO,
       strokeWidthRatioMin: MIN_STROKE_WIDTH_RATIO,
@@ -296,11 +344,23 @@ export default {
       return Boolean(compareTarget && compareTarget.source);
     },
 
+    canShowSvgSource() {
+      const compareTarget = this.getSvgCompareTarget();
+      return Boolean(compareTarget && compareTarget.source);
+    },
+
     svgCompareButtonTitle() {
       const compareTarget = this.getSvgCompareTarget();
       if (!compareTarget) return 'Select a drawn shape first';
       if (!compareTarget.source) return 'No source SVG is registered for this shape';
       return `Compare with ${compareTarget.source.fileName}`;
+    },
+
+    svgShowButtonTitle() {
+      const compareTarget = this.getSvgCompareTarget();
+      if (!compareTarget) return 'Select a drawn shape first';
+      if (!compareTarget.source) return 'No source SVG is registered for this shape';
+      return `Show ${compareTarget.source.fileName} on the canvas`;
     },
 
     svgComparePreviewStyle() {
@@ -509,8 +569,8 @@ export default {
     },
 
     createDraftNode(pointer) {
-      const node = markRaw(createNodeFromType(this.selectedTool, {
-        id: this.createNodeId(this.selectedTool),
+      const node = markRaw(this.createNodeForTool(this.selectedTool, {
+        id: this.createNodeId(this.selectedTool.replace(':', '-')),
         x: pointer.x,
         y: pointer.y,
         width: 1,
@@ -524,6 +584,15 @@ export default {
       this.layer.add(node);
       this.layer.batchDraw();
       return node;
+    },
+
+    createNodeForTool(toolType, attrs = {}) {
+      const svgShapeType = getSvgToolShapeType(toolType);
+      if (svgShapeType) {
+        return createSvgImageNode(svgShapeType, attrs);
+      }
+
+      return createNodeFromType(toolType, attrs);
     },
 
     updateDraftNode(rect) {
@@ -673,6 +742,7 @@ export default {
       this.closeSvgCompare();
       this.clearSelection();
       this.destroyEquipmentNodes();
+      this.destroySvgReferenceNodes();
       this.transformer.moveToTop();
       this.layer.batchDraw();
       this.saveLayout();
@@ -800,6 +870,7 @@ export default {
       this.closeSvgCompare();
       this.clearSelection();
       this.destroyEquipmentNodes();
+      this.destroySvgReferenceNodes();
 
       restoredNodes.forEach((node) => {
         this.layer.add(node);
@@ -824,6 +895,7 @@ export default {
       this.closeSvgCompare();
       this.clearSelection();
       this.destroyEquipmentNodes();
+      this.destroySvgReferenceNodes();
 
       items.forEach((item, index) => {
         const node = this.createStateRgbNode(item, index);
@@ -852,7 +924,6 @@ export default {
         draggable: true,
         strokeWidthRatio: this.normalizedStrokeWidthRatio,
         fillColor: item.fillColor,
-        strokeColor: item.shapeType === 'crane' ? item.fillColor : undefined,
       }));
 
       shape.setAttrs({
@@ -860,7 +931,6 @@ export default {
         equipmentState: item.state,
         equipmentStatus: item.status,
         [FILL_COLOR_ATTR]: item.fillColor,
-        [STROKE_COLOR_ATTR]: item.shapeType === 'crane' ? item.fillColor : undefined,
         [FIXED_STROKE_WIDTH_RATIO_ATTR]: this.normalizedStrokeWidthRatio,
         rgb: {
           r: item.red,
@@ -875,7 +945,6 @@ export default {
         equipmentState: item.state,
         equipmentStatus: item.status,
         fillColor: item.fillColor,
-        strokeColor: item.shapeType === 'crane' ? item.fillColor : undefined,
         rgb: {
           r: item.red,
           g: item.green,
@@ -946,6 +1015,52 @@ export default {
       }
     },
 
+    async showSelectedSvgSource() {
+      const compareTarget = this.getSvgCompareTarget();
+      if (!compareTarget) {
+        this.errorMessage = 'Select a drawn shape first.';
+        return;
+      }
+
+      if (!compareTarget.source) {
+        this.errorMessage = 'No source SVG is registered for this shape.';
+        return;
+      }
+
+      try {
+        const [dimensions, image] = await Promise.all([
+          this.getSvgSourceDimensions(compareTarget.source),
+          this.loadSvgSourceImage(compareTarget.source),
+        ]);
+
+        if (!this.layer) return;
+
+        const position = this.getSvgSourceShowPosition(compareTarget.target, dimensions);
+        const svgNode = markRaw(new Konva.Image({
+          id: this.createNodeId(`svg-source-${compareTarget.type}`),
+          x: position.x,
+          y: position.y,
+          width: dimensions.width,
+          height: dimensions.height,
+          image,
+          draggable: false,
+          listening: false,
+          layoutNodeKind: SVG_REFERENCE_NODE_KIND,
+          svgSourceType: compareTarget.type,
+          svgSourceFileName: compareTarget.source.fileName,
+        }));
+
+        this.layer.add(svgNode);
+        if (this.transformer) this.transformer.moveToTop();
+        this.layer.batchDraw();
+        this.errorMessage = '';
+      } catch (error) {
+        this.errorMessage = error && error.message
+          ? error.message
+          : 'Unable to show source SVG.';
+      }
+    },
+
     closeSvgCompare() {
       if (!this.svgCompareDialog.visible) return;
 
@@ -959,6 +1074,105 @@ export default {
         actualHeight: 0,
         displayWidth: 0,
         displayHeight: 0,
+      };
+    },
+
+    async getSvgSourceDimensions(source) {
+      if (svgSourceDimensionsCache.has(source.url)) {
+        return svgSourceDimensionsCache.get(source.url);
+      }
+
+      const response = await fetch(source.url);
+      if (!response.ok) {
+        throw new Error(`Unable to load ${source.fileName}.`);
+      }
+
+      const svgText = await response.text();
+      const document = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+      const svg = document.documentElement;
+      if (!svg || svg.tagName.toLowerCase() !== 'svg') {
+        throw new Error(`${source.fileName} is not a valid SVG.`);
+      }
+
+      const viewBox = this.parseSvgViewBox(svg.getAttribute('viewBox'));
+      const width = this.parseSvgLength(svg.getAttribute('width')) || (viewBox && viewBox.width);
+      const height = this.parseSvgLength(svg.getAttribute('height')) || (viewBox && viewBox.height);
+
+      if (!width || !height) {
+        throw new Error(`${source.fileName} does not define a drawable size.`);
+      }
+
+      const dimensions = {
+        width: Math.max(Math.round(width), 1),
+        height: Math.max(Math.round(height), 1),
+      };
+
+      svgSourceDimensionsCache.set(source.url, dimensions);
+      return dimensions;
+    },
+
+    parseSvgLength(value) {
+      if (!value || /%$/.test(value.trim())) return null;
+
+      const numericValue = Number.parseFloat(value);
+      return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
+    },
+
+    parseSvgViewBox(value) {
+      if (!value) return null;
+
+      const parts = value
+        .trim()
+        .split(/[\s,]+/)
+        .map((part) => Number(part));
+
+      if (parts.length !== 4 || parts.some((part) => !Number.isFinite(part))) return null;
+
+      return {
+        x: parts[0],
+        y: parts[1],
+        width: parts[2],
+        height: parts[3],
+      };
+    },
+
+    loadSvgSourceImage(source) {
+      if (svgSourceImageCache.has(source.url)) {
+        return Promise.resolve(svgSourceImageCache.get(source.url));
+      }
+
+      if (svgSourceImageLoadCache.has(source.url)) {
+        return svgSourceImageLoadCache.get(source.url);
+      }
+
+      const loadPromise = new Promise((resolve, reject) => {
+        const image = new Image();
+        image.decoding = 'async';
+        image.onload = () => {
+          svgSourceImageCache.set(source.url, image);
+          resolve(image);
+        };
+        image.onerror = () => reject(new Error(`Unable to render ${source.fileName}.`));
+        image.src = source.url;
+      });
+
+      svgSourceImageLoadCache.set(source.url, loadPromise);
+      return loadPromise;
+    },
+
+    getSvgSourceShowPosition(target, dimensions) {
+      const fallback = { x: STATE_TABLE_START_X, y: STATE_TABLE_START_Y };
+      if (!this.layer || !target || typeof target.getClientRect !== 'function') return fallback;
+
+      const rect = target.getClientRect({ relativeTo: this.layer });
+      if (!rect || !Number.isFinite(rect.x) || !Number.isFinite(rect.y)) return fallback;
+
+      const x = rect.x + rect.width + SVG_SHOW_GAP;
+      const y = rect.y;
+
+      return {
+        x: Math.round(x),
+        y: Math.round(y),
       };
     },
 
@@ -1048,6 +1262,16 @@ export default {
     destroyEquipmentNodes() {
       this.getTopLevelEquipmentNodes().forEach((node) => {
         node.destroy();
+      });
+    },
+
+    destroySvgReferenceNodes() {
+      if (!this.layer) return;
+
+      this.toNodeArray(this.layer.getChildren()).forEach((node) => {
+        if (node && typeof node.getAttr === 'function' && node.getAttr('layoutNodeKind') === SVG_REFERENCE_NODE_KIND) {
+          node.destroy();
+        }
       });
     },
 

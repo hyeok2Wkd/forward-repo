@@ -23,7 +23,8 @@ const DRAW_COMMANDS = [
     "y": 0,
     "width": 60.0,
     "height": 30.0,
-    "rx": 7.0
+    "rx": 20.0,
+    "fixedRadius": true
   },
   {
     "type": "rect",
@@ -35,7 +36,8 @@ const DRAW_COMMANDS = [
     "y": 1.0,
     "width": 58.0,
     "height": 28.0,
-    "rx": 6.0
+    "rx": 19.0,
+    "fixedRadius": true
   }
 ];
 

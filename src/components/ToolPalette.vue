@@ -5,10 +5,18 @@
       :key="item.type"
       type="button"
       class="tool-palette__item"
-      :class="{ 'tool-palette__item--active': item.type === selectedType }"
+      :class="{
+        'tool-palette__item--active': item.type === selectedType,
+        'tool-palette__item--svg': item.mode === 'svg',
+      }"
+      :title="item.title || item.label"
       @click="selectTool(item.type)"
     >
-      <span class="tool-palette__swatch" aria-hidden="true"></span>
+      <span
+        class="tool-palette__swatch"
+        :class="{ 'tool-palette__swatch--svg': item.mode === 'svg' }"
+        aria-hidden="true"
+      ></span>
       <span class="tool-palette__label">{{ item.label }}</span>
     </button>
   </aside>
@@ -75,6 +83,10 @@ export default {
   color: #0f3f98;
 }
 
+.tool-palette__item--svg {
+  color: #374151;
+}
+
 .tool-palette__swatch {
   width: 14px;
   height: 14px;
@@ -87,6 +99,13 @@ export default {
 .tool-palette__item--active .tool-palette__swatch {
   border-color: #2563eb;
   background: #dbeafe;
+}
+
+.tool-palette__swatch--svg {
+  border-color: #64748b;
+  background:
+    linear-gradient(135deg, transparent 0 45%, #64748b 45% 55%, transparent 55%),
+    #ffffff;
 }
 
 .tool-palette__label {

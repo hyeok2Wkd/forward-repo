@@ -5,6 +5,7 @@ import {
   getShapeTypeFromNode,
   restoreShapeNode,
 } from './shapeFactoryRegistry';
+import { getSvgSourceForShapeType } from './svgSourceRegistry';
 import {
   FIXED_STROKE_WIDTH_RATIO_ATTR,
   FILL_COLOR_ATTR,
@@ -16,6 +17,11 @@ import {
 export const EQUIPMENT_GROUP_KIND = 'equipmentGroup';
 export const LABEL_ROLE = 'equipmentLabel';
 export const DEFAULT_LABEL_FONT_SIZE = 13;
+export const SVG_IMAGE_NODE_KIND = 'svgImage';
+export const SVG_RENDER_MODE = 'svg';
+
+const svgImageCache = new Map();
+const svgImageLoadCache = new Map();
 
 export function normalizeDragRect(start, current) {
   if (!start || !current) {
@@ -115,6 +121,8 @@ export function serializeNode(node) {
     return {
       id: target.id(),
       type,
+      renderMode: readNodeAttr(target, 'renderMode') || readNodeAttr(shape, 'renderMode'),
+      svgSourceFileName: readNodeAttr(target, 'svgSourceFileName') || readNodeAttr(shape, 'svgSourceFileName'),
       name: labelText,
       x: target.x(),
       y: target.y(),
@@ -142,6 +150,8 @@ export function serializeNode(node) {
     return {
       id: target.id(),
       type,
+      renderMode: readNodeAttr(target, 'renderMode'),
+      svgSourceFileName: readNodeAttr(target, 'svgSourceFileName'),
       name: '',
       x: target.x(),
       y: target.y(),
@@ -172,11 +182,13 @@ export function restoreNodeFromData(data = {}) {
     throw new Error(`Unknown shape type: ${data.type}`);
   }
 
-  const shape = restoreShapeNode({
-    ...data,
-    type,
-    draggable: data.draggable !== false,
-  });
+  const shape = data.renderMode === SVG_RENDER_MODE
+    ? createSvgImageNode(type, data)
+    : restoreShapeNode({
+      ...data,
+      type,
+      draggable: data.draggable !== false,
+    });
   applySerializedAttrs(shape, data);
 
   const nameText = data.name || data.labelText || '';
@@ -191,6 +203,44 @@ export function restoreNodeFromData(data = {}) {
 
 export function createNodeFromType(type, attrs = {}) {
   return createShapeNode(type, attrs);
+}
+
+export function createSvgImageNode(type, attrs = {}) {
+  const canonicalType = getCanonicalShapeType(type);
+  const source = getSvgSourceForShapeType(canonicalType);
+
+  if (!canonicalType || !source) {
+    throw new Error(`No SVG source is registered for shape type: ${type}`);
+  }
+
+  const node = new Konva.Image({
+    id: attrs.id,
+    x: attrs.x || 0,
+    y: attrs.y || 0,
+    width: Math.max(attrs.width || 1, 1),
+    height: Math.max(attrs.height || 1, 1),
+    scaleX: attrs.scaleX == null ? 1 : attrs.scaleX,
+    scaleY: attrs.scaleY == null ? 1 : attrs.scaleY,
+    rotation: attrs.rotation || 0,
+    draggable: attrs.draggable !== false,
+    image: svgImageCache.get(source.url),
+    shapeType: canonicalType,
+    equipmentType: canonicalType,
+    layoutShapeType: canonicalType,
+    layoutNodeKind: SVG_IMAGE_NODE_KIND,
+    renderMode: SVG_RENDER_MODE,
+    svgSourceFileName: source.fileName,
+  });
+
+  loadSvgImage(source).then((image) => {
+    node.image(image);
+    const layer = typeof node.getLayer === 'function' ? node.getLayer() : null;
+    if (layer) layer.batchDraw();
+  }).catch(() => {
+    // The caller surfaces load errors for explicit actions; restored nodes can retry on reload.
+  });
+
+  return node;
 }
 
 export function setGroupLabelText(group, labelText = '') {
@@ -271,7 +321,17 @@ export function findEquipmentShape(node) {
 
 export function isEquipmentShape(node) {
   if (!node || typeof node.getClassName !== 'function') return false;
-  return node.getClassName() === 'Shape' && Boolean(getShapeTypeFromNode(node));
+  const className = node.getClassName();
+  return (
+    className === 'Shape'
+    || (
+      className === 'Image'
+      && (
+        node.getAttr('layoutNodeKind') === SVG_IMAGE_NODE_KIND
+        || node.getAttr('renderMode') === SVG_RENDER_MODE
+      )
+    )
+  ) && Boolean(getShapeTypeFromNode(node));
 }
 
 export function isEquipmentGroup(node) {
@@ -327,6 +387,8 @@ function applySerializedAttrs(node, data = {}) {
   setDefinedAttr(attrs, 'equipmentState', data.equipmentState);
   setDefinedAttr(attrs, 'equipmentStatus', data.equipmentStatus);
   setDefinedAttr(attrs, 'rgb', data.rgb);
+  setDefinedAttr(attrs, 'renderMode', data.renderMode);
+  setDefinedAttr(attrs, 'svgSourceFileName', data.svgSourceFileName);
 
   node.setAttrs(attrs);
 }
@@ -369,4 +431,28 @@ function isStageNode(node) {
 
 function createGeneratedId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function loadSvgImage(source) {
+  if (svgImageCache.has(source.url)) {
+    return Promise.resolve(svgImageCache.get(source.url));
+  }
+
+  if (svgImageLoadCache.has(source.url)) {
+    return svgImageLoadCache.get(source.url);
+  }
+
+  const loadPromise = new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => {
+      svgImageCache.set(source.url, image);
+      resolve(image);
+    };
+    image.onerror = () => reject(new Error(`Unable to load ${source.fileName}.`));
+    image.src = source.url;
+  });
+
+  svgImageLoadCache.set(source.url, loadPromise);
+  return loadPromise;
 }

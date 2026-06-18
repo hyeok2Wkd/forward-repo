@@ -231,7 +231,7 @@ function drawCommand(ctx, command, viewBox, shapeScale, styleOverrides) {
   // rect strokes can be edge-aligned.
   if (command.type === 'rect') {
     if (command.fill) {
-      createPrimitivePath(ctx, command);
+      createRectPath(ctx, command, shapeScale);
       ctx.fillStyle = applyOpacity(resolveCommandFill(command, styleOverrides), command.fillOpacity);
       ctx.fill(command.fillRule === 'evenodd' ? 'evenodd' : 'nonzero');
     }
@@ -721,13 +721,16 @@ function drawEdgeAlignedRectStroke(ctx, command, shapeScale, styleOverrides) {
   const outerY = (command.y || 0) - originalInset;
   const outerWidth = Math.max((command.width || 0) + originalStrokeWidth, 0);
   const outerHeight = Math.max((command.height || 0) + originalStrokeWidth, 0);
-  const outerRx = command.rx == null
+  const outerBaseRx = command.rx == null
     ? 0
     : Math.max(command.rx + originalInset, 0);
   const ryBase = command.ry == null ? command.rx : command.ry;
-  const outerRy = ryBase == null
-    ? outerRx
+  const outerBaseRy = ryBase == null
+    ? outerBaseRx
     : Math.max(ryBase + originalInset, 0);
+  const outerRadii = getRectRadii(ctx, command, shapeScale, outerBaseRx, outerBaseRy);
+  const outerRx = outerRadii.rx;
+  const outerRy = outerRadii.ry;
 
   const insetX = targetStrokeWidth / Math.max(scaleX, 0.0001);
   const insetY = targetStrokeWidth / Math.max(scaleY, 0.0001);
@@ -769,19 +772,29 @@ function drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale, styleOverride
   const { maxScale } = getCurrentCanvasScale(ctx);
   const originalStrokeWidth = command.strokeWidth || 1;
   const localLineWidth = (originalStrokeWidth * shapeScale.strokeMaxScale) / Math.max(maxScale, 0.0001);
+  const targetStrokeWidth = originalStrokeWidth * shapeScale.strokeMaxScale;
   const originalInset = originalStrokeWidth / 2;
   const outerX = (command.x || 0) - originalInset;
   const outerY = (command.y || 0) - originalInset;
   const outerWidth = Math.max((command.width || 0) + originalStrokeWidth, 0);
   const outerHeight = Math.max((command.height || 0) + originalStrokeWidth, 0);
   const dynamicInset = localLineWidth / 2;
-  const rx = command.rx == null
+  const centerBaseRx = command.rx == null
+    ? 0
+    : Math.max(command.rx + originalInset - targetStrokeWidth / 2, 0);
+  const ryBase = command.ry == null ? command.rx : command.ry;
+  const centerBaseRy = ryBase == null
+    ? centerBaseRx
+    : Math.max(ryBase + originalInset - targetStrokeWidth / 2, 0);
+  const nonFixedRx = command.rx == null
     ? 0
     : Math.max(command.rx + originalInset - dynamicInset, 0);
-  const ryBase = command.ry == null ? command.rx : command.ry;
-  const ry = ryBase == null
-    ? rx
+  const nonFixedRy = ryBase == null
+    ? nonFixedRx
     : Math.max(ryBase + originalInset - dynamicInset, 0);
+  const radiusRadii = command.fixedRadius
+    ? getRectRadii(ctx, command, shapeScale, centerBaseRx, centerBaseRy)
+    : { rx: nonFixedRx, ry: nonFixedRy };
 
   ctx.beginPath();
   roundedRect(
@@ -790,8 +803,8 @@ function drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale, styleOverride
     outerY + dynamicInset,
     Math.max(outerWidth - localLineWidth, 0),
     Math.max(outerHeight - localLineWidth, 0),
-    rx,
-    ry
+    radiusRadii.rx,
+    radiusRadii.ry
   );
 
   ctx.strokeStyle = applyOpacity(resolveCommandStroke(command, styleOverrides), command.strokeOpacity);
@@ -807,14 +820,39 @@ function drawDashedEdgeAlignedRectStroke(ctx, command, shapeScale, styleOverride
 
 function getShapeScale(shape, viewBox, canvasPixelScale) {
   const strokeWidthRatio = getFixedStrokeWidthRatio(shape);
+  const viewportScale = getStageViewportScale(shape);
 
   return {
     scaleX: strokeWidthRatio,
     scaleY: strokeWidthRatio,
     maxScale: strokeWidthRatio,
-    strokeScaleX: strokeWidthRatio * canvasPixelScale.scaleX,
-    strokeScaleY: strokeWidthRatio * canvasPixelScale.scaleY,
-    strokeMaxScale: strokeWidthRatio * canvasPixelScale.maxScale,
+    viewportScaleX: viewportScale.scaleX,
+    viewportScaleY: viewportScale.scaleY,
+    viewportMaxScale: viewportScale.maxScale,
+    strokeScaleX: strokeWidthRatio * canvasPixelScale.scaleX * viewportScale.scaleX,
+    strokeScaleY: strokeWidthRatio * canvasPixelScale.scaleY * viewportScale.scaleY,
+    strokeMaxScale: strokeWidthRatio * canvasPixelScale.maxScale * viewportScale.maxScale,
+  };
+}
+
+function getStageViewportScale(shape) {
+  const stage = shape && typeof shape.getStage === 'function'
+    ? shape.getStage()
+    : null;
+  const stageScale = stage && typeof stage.scale === 'function'
+    ? stage.scale()
+    : null;
+  const scaleX = stageScale && Number.isFinite(stageScale.x)
+    ? Math.abs(stageScale.x)
+    : 1;
+  const scaleY = stageScale && Number.isFinite(stageScale.y)
+    ? Math.abs(stageScale.y)
+    : 1;
+
+  return {
+    scaleX: Math.max(scaleX, 0.0001),
+    scaleY: Math.max(scaleY, 0.0001),
+    maxScale: Math.max(scaleX, scaleY, 0.0001),
   };
 }
 
@@ -853,20 +891,12 @@ function getCurrentCanvasScale(ctx) {
 }
 
 function createPrimitivePath(ctx, command) {
-  ctx.beginPath();
-
   if (command.type === 'rect') {
-    roundedRect(
-      ctx,
-      command.x || 0,
-      command.y || 0,
-      command.width || 0,
-      command.height || 0,
-      command.rx || 0,
-      command.ry || command.rx || 0
-    );
+    createRectPath(ctx, command);
     return;
   }
+
+  ctx.beginPath();
 
   if (command.type === 'circle') {
     ctx.arc(command.cx || 0, command.cy || 0, command.r || 0, 0, Math.PI * 2);
@@ -895,6 +925,43 @@ function createPrimitivePath(ctx, command) {
     }
     if (command.type === 'polygon') ctx.closePath();
   }
+}
+
+function createRectPath(ctx, command, shapeScale) {
+  const radii = getRectRadii(ctx, command, shapeScale);
+
+  ctx.beginPath();
+  roundedRect(
+    ctx,
+    command.x || 0,
+    command.y || 0,
+    command.width || 0,
+    command.height || 0,
+    radii.rx,
+    radii.ry
+  );
+}
+
+function getRectRadii(ctx, command, shapeScale, rx = command.rx || 0, ry = command.ry == null ? rx : command.ry) {
+  const safeRx = Math.max(rx || 0, 0);
+  const safeRy = Math.max(ry || 0, 0);
+
+  if (!command.fixedRadius) {
+    return { rx: safeRx, ry: safeRy };
+  }
+
+  const { scaleX, scaleY } = getCurrentCanvasScale(ctx);
+  const viewportScaleX = shapeScale && shapeScale.viewportScaleX
+    ? shapeScale.viewportScaleX
+    : 1;
+  const viewportScaleY = shapeScale && shapeScale.viewportScaleY
+    ? shapeScale.viewportScaleY
+    : 1;
+
+  return {
+    rx: (safeRx * viewportScaleX) / Math.max(scaleX, 0.0001),
+    ry: (safeRy * viewportScaleY) / Math.max(scaleY, 0.0001),
+  };
 }
 
 function roundedRect(ctx, x, y, width, height, rx = 0, ry = rx) {
